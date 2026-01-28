@@ -1,0 +1,11 @@
+[package]
+name = "hvisor-device-tree-tool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.54", features = ["derive"] }
+petgraph = "0.8.3"
+nom = { version = "7.1", features = ["alloc", "std"] }
+indexmap = "2.2"
