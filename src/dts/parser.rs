@@ -718,7 +718,10 @@ fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], I
                 input,
                 Item::Node(Node::Existing {
                     name: NodeName::Full(name),
-                    proplist: props.into_iter().map(|p| (p.name().to_owned(), p)).collect(),
+                    proplist: props
+                        .into_iter()
+                        .map(|p| (p.name().to_owned(), p))
+                        .collect(),
                     children: children
                         .into_iter()
                         .map(|n| (n.name().as_str().to_owned(), n))
@@ -810,6 +813,7 @@ fn parse_data(input: &[u8]) -> IResult<&[u8], Data> {
     )))(input)
 }
 
+#[allow(unused)]
 fn parse_prop(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Property> {
     move |input: &[u8]| {
         ws(alt((
@@ -1037,9 +1041,13 @@ pub fn parse_dt(source: &[u8]) -> Result<ParseResult<'_>, ParseError> {
         }
         Err(nom::Err::Incomplete(_)) => Err(ParseError::IncompleteInput),
         Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-            eprintln!("Nom Error: {:?}, Input: {:?}", e.code, std::str::from_utf8(e.input).unwrap_or("not utf8"));
+            eprintln!(
+                "Nom Error: {:?}, Input: {:?}",
+                e.code,
+                std::str::from_utf8(e.input).unwrap_or("not utf8")
+            );
             Err(ParseError::NomError)
-        },
+        }
     }
 }
 
@@ -1048,15 +1056,13 @@ mod tests {
     use super::*;
 
     fn parse_prop(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Property> {
-        move |input: &[u8]| {
-            match parse_item(input_len)(input) {
-                Ok((rem, Item::Prop(p))) => Ok((rem, p)),
-                Ok((_, Item::Node(_))) => Err(nom::Err::Error(nom::error::Error::new(
-                    input,
-                    nom::error::ErrorKind::Tag,
-                ))),
-                Err(e) => Err(e),
-            }
+        move |input: &[u8]| match parse_item(input_len)(input) {
+            Ok((rem, Item::Prop(p))) => Ok((rem, p)),
+            Ok((_, Item::Node(_))) => Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Tag,
+            ))),
+            Err(e) => Err(e),
         }
     }
 

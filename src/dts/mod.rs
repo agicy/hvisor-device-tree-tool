@@ -13,8 +13,11 @@ pub mod include;
 pub mod parser;
 pub mod tree;
 
+use anyhow::{Context, Result};
 use std::borrow::Borrow;
+use std::io::Read;
 use std::iter::once;
+use std::path::PathBuf;
 
 /// Various errors that can occur why parsing.
 // TODO: impl Display and Error - issue 1.1
@@ -105,6 +108,44 @@ where
         Some((line, Some(start))) => Ok((line + 2, offset - start)),
         None => Ok((1, offset + 1)),
         Some((_, None)) => Err(ParseError::NotFound),
+    }
+}
+
+/// Parses a DTS file from a path or stdin if path is None.
+///
+/// # Errors
+/// Returns an error if reading fails or parsing fails.
+pub fn parse_dts(path: Option<&PathBuf>) -> Result<tree::DTInfo> {
+    let mut buffer = Vec::new();
+
+    match path {
+        Some(p) => {
+            let mut file =
+                std::fs::File::open(p).with_context(|| format!("Error opening file {:?}", p))?;
+            file.read_to_end(&mut buffer)
+                .with_context(|| format!("Error reading file {:?}", p))?;
+        }
+        None => {
+            // Read from stdin
+            std::io::stdin()
+                .read_to_end(&mut buffer)
+                .context("Error reading from stdin")?;
+        }
+    }
+
+    match parser::parse_dt(&buffer) {
+        Ok(result) => match result {
+            parser::ParseResult::Complete(mut tree, amends) => {
+                tree.merge_amends(&amends);
+                Ok(tree)
+            }
+            parser::ParseResult::RemainingInput(mut tree, amends, rem) => {
+                eprintln!("Warning: remaining input: {}", String::from_utf8_lossy(rem));
+                tree.merge_amends(&amends);
+                Ok(tree)
+            }
+        },
+        Err(e) => Err(anyhow::anyhow!("Error parsing DTS: {:?}", e)),
     }
 }
 

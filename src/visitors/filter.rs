@@ -1,37 +1,30 @@
-use crate::dts::tree::{Data, Node, Property};
+use crate::dts::tree::Node;
 use crate::visitors::Visitor;
 
-pub struct FilterDisabled;
+pub struct NodeFilter<F>
+where
+    F: Fn(&Node) -> bool,
+{
+    predicate: F,
+}
 
-impl FilterDisabled {
-    pub fn new() -> Self {
-        Self
-    }
-
-    fn is_disabled(node: &Node) -> bool {
-        if let Node::Existing { proplist, .. } = node {
-            if let Some(Property::Existing {
-                val: Some(data), ..
-            }) = proplist.get("status")
-            {
-                for d in data {
-                    if let Data::String(s) = d {
-                        if s == "disabled" {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        false
+impl<F> NodeFilter<F>
+where
+    F: Fn(&Node) -> bool,
+{
+    pub fn new(predicate: F) -> Self {
+        Self { predicate }
     }
 }
 
-impl Visitor for FilterDisabled {
+impl<F> Visitor for NodeFilter<F>
+where
+    F: Fn(&Node) -> bool,
+{
     fn enter_node(&mut self, _name: &str, node: &mut Node) -> bool {
         if let Node::Existing { children, .. } = node {
-            // Remove disabled children
-            children.retain(|_name, child_node| !Self::is_disabled(child_node));
+            // Remove children that satisfy the predicate (should be filtered out)
+            children.retain(|_name, child_node| !(self.predicate)(child_node));
         }
         true
     }

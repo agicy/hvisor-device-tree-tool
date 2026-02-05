@@ -4,6 +4,7 @@ pub mod filter;
 pub mod interrupts;
 pub mod reg_extractor;
 pub mod sorter;
+pub mod writer;
 
 /// 访问者 Trait
 /// 允许在进入节点和退出节点时执行逻辑
