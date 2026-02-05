@@ -16,11 +16,10 @@ fn test_dependencies() {
 
     let mut extractor = DependencyExtractor::new();
     Walker::walk(&mut tree.root, "/", &mut extractor);
-    extractor.generate_output();
 
     let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
     
-    assert_eq!(extractor.output.trim(), expected.trim());
+    assert_eq!(extractor.output().trim(), expected.trim());
 }
 
 #[test]
@@ -34,7 +33,7 @@ fn test_reg_extractor() {
 
     let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
     
-    assert_eq!(extractor.output.trim(), expected.trim());
+    assert_eq!(extractor.output().trim(), expected.trim());
 }
 
 #[test]
@@ -48,7 +47,7 @@ fn test_interrupts() {
 
     let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
     
-    assert_eq!(extractor.output.trim(), expected.trim());
+    assert_eq!(extractor.output().trim(), expected.trim());
 }
 
 #[test]

@@ -3,34 +3,19 @@ use crate::visitors::Visitor;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DependencyInfo {
+    pub child_path: String,
+    pub parent_label: String,
+}
+
 pub struct DependencyExtractor {
     // 当前路径栈
     path_stack: Vec<String>,
-    // 收集到的依赖关系 (child_path, parent_name/phandle)
-    // 由于是 name reference，这里存 parent_name
-    dependencies: Vec<(String, String)>,
+    // 收集到的依赖关系
+    dependencies: Vec<DependencyInfo>,
     // 节点路径映射：name -> full_path
-    // 用于将引用名解析为完整路径
-    // 注意：这里假设 name 是唯一的，或者我们能通过 label 找到。
-    // 题目要求 "全部用名字引用"，即 &clk, &gic。
-    // 在 parser 中，&clk 会被解析为 Cell::Ref("clk") 或 Data::Reference("clk")。
-    // 我们需要维护 label -> full_path 的映射。
     label_map: HashMap<String, String>,
-    
-    // 临时存储所有节点，以便第二遍遍历？
-    // 或者我们可以在 enter_node 时记录 label，
-    // 但依赖关系可能引用尚未访问的节点吗？
-    // "全部用名字引用" 通常意味着引用 label。
-    // DTS 编译时会解析 label。
-    // 如果我们只是解析源文件，label 映射到路径需要我们在遍历过程中建立。
-    // 我们可以分两步：
-    // 1. 第一遍遍历建立 label -> path 映射。
-    // 2. 第二遍遍历解析依赖。
-    // 
-    // 或者，我们可以收集所有依赖关系 (child_path, target_label)，
-    // 然后在最后统一解析 target_label 为 target_path。
-    
-    pub output: String,
 }
 
 impl DependencyExtractor {
@@ -39,8 +24,22 @@ impl DependencyExtractor {
             path_stack: Vec::new(),
             dependencies: Vec::new(),
             label_map: HashMap::new(),
-            output: String::new(),
         }
+    }
+
+    pub fn output(&self) -> String {
+        // 对依赖进行排序以保证输出确定性
+        // 注意：这里我们不能直接修改 self.dependencies，因为 output 是 &self
+        // 所以我们克隆并排序
+        let mut deps = self.dependencies.iter().collect::<Vec<_>>();
+        deps.sort();
+        
+        let mut output = String::new();
+        for dep in deps {
+            let target_path = self.label_map.get(&dep.parent_label).cloned().unwrap_or_else(|| format!("label:{}", dep.parent_label));
+            writeln!(output, "{} -> {}", dep.child_path, target_path).unwrap();
+        }
+        output
     }
 
     fn get_current_path(&self) -> String {
@@ -85,12 +84,18 @@ impl DependencyExtractor {
                     for d in data {
                         match d {
                             Data::Reference(name, _) => {
-                                self.dependencies.push((current_path.to_string(), name.clone()));
+                                self.dependencies.push(DependencyInfo {
+                                    child_path: current_path.to_string(),
+                                    parent_label: name.clone(),
+                                });
                             }
                             Data::Cells(_, cells) => {
                                 for c in cells {
                                     if let Cell::Ref(name, _) = c {
-                                        self.dependencies.push((current_path.to_string(), name.clone()));
+                                        self.dependencies.push(DependencyInfo {
+                                            child_path: current_path.to_string(),
+                                            parent_label: name.clone(),
+                                        });
                                     }
                                 }
                             }
@@ -127,18 +132,5 @@ impl Visitor for DependencyExtractor {
 
     fn exit_node(&mut self, _name: &str, _node: &mut Node) {
         self.path_stack.pop();
-    }
-}
-
-// 扩展方法，用于在遍历结束后生成输出
-impl DependencyExtractor {
-    pub fn generate_output(&mut self) {
-        // 对依赖进行排序以保证输出确定性
-        self.dependencies.sort();
-        
-        for (child, target_label) in &self.dependencies {
-            let target_path = self.label_map.get(target_label).cloned().unwrap_or_else(|| format!("label:{}", target_label));
-            writeln!(self.output, "{} -> {}", child, target_path).unwrap();
-        }
     }
 }
