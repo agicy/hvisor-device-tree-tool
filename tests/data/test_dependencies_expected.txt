@@ -1,0 +1,13 @@
+/bus_complex/dma-master@1 -> /bus_complex/iommu@0
+/bus_complex/nested-device -> /clock-controller
+/bus_complex/nested-device -> /device-multi-ref
+/device-chain-1 -> /clock-controller
+/device-chain-2 -> /device-chain-1
+/device-multi-label -> /clock-controller
+/device-multi-ref -> /clock-controller
+/device-multi-ref -> /clock-controller
+/device-multi-ref -> /device-chain-1
+/device-multi-ref -> /device-chain-2
+/device-multi-ref -> /power-controller
+/device-ref-multi-label -> /device-multi-label
+/device-ref-multi-label -> /device-multi-label

@@ -6,6 +6,22 @@ use visitors::filter::NodeFilter;
 use visitors::writer::DtsWriter;
 use visitors::reg_extractor::RegExtractor;
 use visitors::interrupts::InterruptsExtractor;
+use visitors::dependency::DependencyExtractor;
+
+#[test]
+fn test_dependencies() {
+    let path = PathBuf::from("tests/data/test_dependencies.dts");
+    let expected_path = PathBuf::from("tests/data/test_dependencies_expected.txt");
+    let mut tree = dts::parse_dts(Some(&path)).expect("Failed to parse DTS");
+
+    let mut extractor = DependencyExtractor::new();
+    Walker::walk(&mut tree.root, "/", &mut extractor);
+    extractor.generate_output();
+
+    let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
+    
+    assert_eq!(extractor.output.trim(), expected.trim());
+}
 
 #[test]
 fn test_reg_extractor() {

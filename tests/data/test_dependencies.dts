@@ -1,0 +1,76 @@
+/dts-v1/;
+
+/ {
+	model = "Dependency Complex Test Board";
+	compatible = "hvisor,dep-complex-board";
+
+	// 基础控制器
+	clk: clock-controller {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+	};
+
+	power: power-controller {
+		compatible = "power-domain";
+		#power-domain-cells = <0>;
+	};
+
+	gic: interrupt-controller {
+		compatible = "arm,gic";
+		interrupt-controller;
+		#interrupt-cells = <3>;
+	};
+
+	// 链式依赖：dev_chain_1 -> clk, dev_chain_2 -> dev_chain_1
+	dev_chain_1: device-chain-1 {
+		clocks = <&clk>;
+	};
+
+	dev_chain_2: device-chain-2 {
+		phys = <&dev_chain_1>; // 使用 phys 模拟依赖
+	};
+
+	// 列表引用：一个属性引用多个节点
+	dev_multi_ref: device-multi-ref {
+		clocks = <&clk>, <&clk>; // 引用两次（虽然不常见，但测试解析）
+		power-domains = <&power>;
+		phys = <&dev_chain_1>, <&dev_chain_2>; // 引用多个不同设备
+	};
+
+	// 嵌套引用：父子节点互相引用（模拟复杂拓扑，虽然实际硬件少见）
+	// 父节点依赖子节点提供的服务（例如 iommu 在子节点？）
+	// 或者子节点引用兄弟节点
+	bus_complex {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		iommu: iommu@0 {
+			reg = <0>;
+			#iommu-cells = <0>;
+		};
+
+		dma_master: dma-master@1 {
+			reg = <1>;
+			iommus = <&iommu>;
+		};
+		
+		// 跨层级引用
+		nested_dev: nested-device {
+			clocks = <&clk>; // 引用根级
+			phys = <&dev_multi_ref>; // 引用同级但不同父
+		};
+	};
+
+    // 别名解析测试：虽然 extractor 内部是用 label map，但确保 label 能够正确覆盖
+    // DTS 中同一个节点可以有多个 label。
+    // label1: label2: node { ... }
+    // 引用 &label1 和 &label2 应该指向同一个路径。
+    multi_label: another_label: device-multi-label {
+        clocks = <&clk>;
+    };
+
+    dev_ref_multi_label: device-ref-multi-label {
+        phys = <&multi_label>;
+        resets = <&another_label>; // 引用同一个节点的不同标签
+    };
+};

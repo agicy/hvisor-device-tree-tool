@@ -3,11 +3,10 @@ use std::process;
 
 use crate::dts;
 use crate::dts::tree::{Data, Node, Property};
-use crate::visitors::Walker;
-use crate::visitors::filter::NodeFilter;
-use crate::visitors::interrupts::InterruptsExtractor;
-use crate::visitors::reg_extractor::RegExtractor;
-use crate::visitors::sorter::SortByReference;
+use crate::visitors::{
+    dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
+    reg_extractor::RegExtractor, sorter::SortByReference, Walker,
+};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -33,6 +32,11 @@ enum Commands {
     },
     /// Extract interrupt information
     ExtractInterrupts {
+        /// Input DTS file (optional, defaults to stdin)
+        input: Option<PathBuf>,
+    },
+    /// Extract dependency information
+    Dependency {
         /// Input DTS file (optional, defaults to stdin)
         input: Option<PathBuf>,
     },
@@ -69,6 +73,12 @@ pub fn run() {
             let mut tree = get_tree(input.as_ref());
             let mut extractor = InterruptsExtractor::new();
             Walker::walk(&mut tree.root, "/", &mut extractor);
+        }
+        Commands::Dependency { input } => {
+            let tree = get_tree(input.as_ref());
+            let mut extractor = DependencyExtractor::new();
+            Walker::walk(&tree.root, "/", &mut extractor);
+            println!("{}", extractor.output());
         }
         Commands::Filter { input } => {
             let mut tree = get_tree(input.as_ref());

@@ -1,5 +1,6 @@
 use crate::dts::tree::Node;
 
+pub mod dependency;
 pub mod filter;
 pub mod interrupts;
 pub mod reg_extractor;

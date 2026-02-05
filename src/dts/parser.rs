@@ -695,8 +695,9 @@ fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], I
         let (input, offset_start) = peek(rest)(input)?;
         let offset = offset_start.len();
 
-        let (input, labels) = many0(terminated(parse_label, char(':')))(input)?;
+        let (input, labels) = many0(terminated(ws(parse_label), ws(char(':'))))(input)?;
         let (input, _) = eat_junk(input)?;
+        
         let (input, name) = map(
             map_res(
                 alt((take_while1(is_prop_node_char), tag("/"))),
