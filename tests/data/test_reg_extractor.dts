@@ -1,0 +1,103 @@
+/dts-v1/;
+
+/ {
+	model = "Reg Extractor Test Board";
+	compatible = "hvisor,test-board";
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpul0: cpu@0 {
+			device_type = "cpu";
+			reg = <0>;
+			status = "okay";
+		};
+
+		cpul1: cpu@1 {
+			device_type = "cpu";
+			reg = <1>;
+			status = "disabled";
+		};
+	};
+
+	memory@80000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x10000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		test_reserved: buffer@90000000 {
+			reg = <0x0 0x90000000 0x0 0x100000>;
+		};
+	};
+
+	uart0: serial@10000000 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "ns16550a";
+		reg = <0x00 0x10000000 0x00 0x100>;
+		status = "okay";
+	};
+
+	uart1: serial@10000100 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		compatible = "ns16550a";
+		reg = <0x00 0x10000100 0x0 0x100>;
+		status = "okay";
+	};
+
+	uart2: serial@20000100 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "ns16550a";
+		reg = <0x00 0x20000100 0x00 0x100>, <0x00 0x20000200 0x00 0x100>;
+		status = "okay";
+	};
+
+	uart3: serial@f20000100 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "ns16550a";
+		reg = <0x0f 0x20000100 0x00 0x100>;
+		status = "okay";
+	};
+
+	gic: interrupt-controller@2f000000 {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		compatible = "arm,gic-v3";
+		reg = <0x0 0x2f000000 0x0 0x10000>,	/* GICD */
+		      <0x0 0x2f100000 0x0 0x200000>;	/* GICR */
+		status = "okay";
+	};
+
+	// 1 addr cell, 2 size cells
+	special_bus {
+		#address-cells = <1>;
+		#size-cells = <2>;
+		
+		large_dev: device@1000 {
+			reg = <0x1000 0x0 0x200000>;
+		};
+	};
+
+	// 2 addr cells, 0 size cells
+	id_map {
+		#address-cells = <2>;
+		#size-cells = <0>;
+		
+		entry@123456789 {
+			reg = <0x1 0x23456789>;
+		};
+	};
+};

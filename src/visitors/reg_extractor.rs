@@ -1,19 +1,64 @@
 use crate::dts::tree::{Cell, Data, Node, Property};
 use crate::visitors::Visitor;
 
+/// Information about an extracted register region.
+#[derive(Debug)]
+pub struct RegInfo {
+    /// The full path of the node.
+    pub alias: String,
+    /// The start address in hex format.
+    pub start_hex: String,
+    /// The size in hex format.
+    pub size_hex: String,
+}
+
+/// A visitor that extracts register information (`reg` property) from nodes.
+///
+/// It tracks `#address-cells` and `#size-cells` to correctly parse the `reg` property.
 pub struct RegExtractor {
-    // 存储 (address-cells, size-cells)
-    cell_stack: Vec<(u32, u32)>,
+    // Stack to track address-cells and size-cells from parent nodes.
+    address_cells_stack: Vec<u32>,
+    size_cells_stack: Vec<u32>,
+    // Stack to track the current path.
+    path_stack: Vec<String>,
+    /// The collected register information.
+    pub regs: Vec<RegInfo>,
 }
 
 impl RegExtractor {
+    /// Creates a new `RegExtractor`.
     pub fn new() -> Self {
         Self {
-            // 根节点默认值，通常是 1, 1，或者是 2, 1 (64bit)
-            cell_stack: vec![(1, 1)],
+            // Default root values: usually 1, 1, or 2, 1 (64bit).
+            address_cells_stack: vec![1],
+            size_cells_stack: vec![1],
+            path_stack: Vec::new(),
+            regs: Vec::new(),
         }
     }
 
+    /// Generates a CSV-like output string of the extracted registers.
+    ///
+    /// Format: full_path,start_hex,size_hex
+    pub fn output(&self) -> String {
+        let mut output = String::new();
+        for reg in &self.regs {
+            use std::fmt::Write;
+            if !reg.size_hex.is_empty() {
+                writeln!(
+                    output,
+                    "{},{},{}",
+                    reg.alias, reg.start_hex, reg.size_hex
+                )
+                .unwrap();
+            } else {
+                writeln!(output, "{},{},", reg.alias, reg.start_hex).unwrap();
+            }
+        }
+        output
+    }
+
+    // Helper to extract a u32 property value.
     fn get_u32_prop(node: &Node, name: &str) -> Option<u32> {
         if let Node::Existing { proplist, .. } = node {
             if let Some(Property::Existing {
@@ -29,23 +74,30 @@ impl RegExtractor {
         }
         None
     }
-
-    fn get_cells(node: &Node, parent_default: (u32, u32)) -> (u32, u32) {
-        let addr = Self::get_u32_prop(node, "#address-cells").unwrap_or(parent_default.0);
-        let size = Self::get_u32_prop(node, "#size-cells").unwrap_or(parent_default.1);
-        (addr, size)
-    }
 }
 
 impl Visitor for RegExtractor {
-    fn enter_node(&mut self, name: &str, node: &mut Node) -> bool {
-        // 1. 获取当前节点定义的 cells，这会影响 *子节点* 的 reg 解析
-        // 但 reg 属性本身的解析依赖于 *父节点* 的 cells。
-        let (parent_addr_cells, parent_size_cells) = *self.cell_stack.last().unwrap();
+    fn enter_node(&mut self, name: &str, node: &Node) -> bool {
+        self.path_stack.push(name.to_string());
 
-        // 2. 提取并打印 Reg
-        // reg is prop with "reg" name.
-        if let Node::Existing { proplist, .. } = node {
+        // 1. Get parent's cells settings (as default).
+        let parent_addr_cells = *self.address_cells_stack.last().unwrap();
+        let parent_size_cells = *self.size_cells_stack.last().unwrap();
+
+        // 2. Determine cells used by current node FOR ITS CHILDREN.
+        // The current node's reg property is parsed using PARENT's cells.
+        // The current node's #address-cells/#size-cells define the context for ITS CHILDREN.
+        
+        let child_addr_cells =
+            Self::get_u32_prop(node, "#address-cells").unwrap_or(parent_addr_cells);
+        let child_size_cells =
+            Self::get_u32_prop(node, "#size-cells").unwrap_or(parent_size_cells);
+
+        // 3. Extract and print Reg using PARENT's cells.
+        if let Node::Existing {
+            proplist, ..
+        } = node
+        {
             if let Some(Property::Existing {
                 val: Some(data), ..
             }) = proplist.get("reg")
@@ -62,6 +114,7 @@ impl Visitor for RegExtractor {
                     }
                 }
 
+                // Use parent's cells to parse current node's reg
                 let chunk_size = (parent_addr_cells + parent_size_cells) as usize;
                 if chunk_size > 0 && !all_cells.is_empty() {
                     for chunk in all_cells.chunks(chunk_size) {
@@ -71,29 +124,49 @@ impl Visitor for RegExtractor {
                         let start_parts = &chunk[0..parent_addr_cells as usize];
                         let size_parts = &chunk[parent_addr_cells as usize..];
 
-                        let start_str = start_parts
-                            .iter()
-                            .map(|c| format!("{:08x}", c))
-                            .collect::<String>();
-                        let size_str = size_parts
-                            .iter()
-                            .map(|c| format!("{:08x}", c))
-                            .collect::<String>();
+                        // Format: alias,name,start,size
+                        // Construct full path
+                        let full_path = if self.path_stack.len() == 1 && self.path_stack[0] == "/" {
+                            "/".to_string()
+                        } else {
+                            format!("/{}", self.path_stack[1..].join("/"))
+                        };
 
-                        println!("{} 0x{} 0x{}", name, start_str, size_str);
+                        // Format helper
+                        let format_hex = |parts: &[u64]| -> String {
+                            if parts.is_empty() {
+                                return "".to_string();
+                            }
+                            let mut val: u128 = 0;
+                            for &p in parts {
+                                val = (val << 32) | (p as u128);
+                            }
+                            format!("0x{:x}", val)
+                        };
+
+                        let start_hex = format_hex(start_parts);
+                        let size_hex = format_hex(size_parts);
+
+                        self.regs.push(RegInfo {
+                            alias: full_path,
+                            start_hex,
+                            size_hex,
+                        });
                     }
                 }
             }
         }
 
-        // 3. 计算当前节点给自己子节点设定的 cells，并入栈
-        let new_cells = Self::get_cells(node, *self.cell_stack.last().unwrap());
-        self.cell_stack.push(new_cells);
+        // 4. Push current cells to stack for children.
+        self.address_cells_stack.push(child_addr_cells);
+        self.size_cells_stack.push(child_size_cells);
 
         true
     }
 
-    fn exit_node(&mut self, _name: &str, _node: &mut Node) {
-        self.cell_stack.pop();
+    fn exit_node(&mut self, _name: &str, _node: &Node) {
+        self.address_cells_stack.pop();
+        self.size_cells_stack.pop();
+        self.path_stack.pop();
     }
 }

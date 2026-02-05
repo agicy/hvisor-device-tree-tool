@@ -4,6 +4,21 @@ use std::path::PathBuf;
 use visitors::Walker;
 use visitors::filter::NodeFilter;
 use visitors::writer::DtsWriter;
+use visitors::reg_extractor::RegExtractor;
+
+#[test]
+fn test_reg_extractor() {
+    let path = PathBuf::from("tests/data/test_reg_extractor.dts");
+    let expected_path = PathBuf::from("tests/data/test_reg_extractor_expected.txt");
+    let mut tree = dts::parse_dts(Some(&path)).expect("Failed to parse DTS");
+
+    let mut extractor = RegExtractor::new();
+    Walker::walk(&mut tree.root, "/", &mut extractor);
+
+    let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
+    
+    assert_eq!(extractor.output.trim(), expected.trim());
+}
 
 #[test]
 fn test_writer() {
