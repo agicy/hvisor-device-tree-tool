@@ -1,0 +1,57 @@
+/dts-v1/;
+
+/ {
+	model = "HVisor Interrupts Test Board";
+	compatible = "hvisor,interrupts-board";
+	interrupt-parent = <&gic>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	// 根控制器
+	gic: interrupt-controller@2f000000 {
+		#interrupt-cells = <3>;
+		interrupt-controller;
+		reg = <0x0 0x2f000000 0x0 0x10000>;
+		phandle = <0x1>;
+	};
+
+	// 嵌套控制器，父节点是 gic
+	// interrupts 描述了它连接到 gic 的中断号
+	sub_intc: interrupt-controller@10000 {
+		compatible = "nested-intc";
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		interrupt-parent = <&gic>;
+		interrupts = <0 100 4>;
+		phandle = <0x2>;
+	};
+
+	// 设备 A，连接到 gic (继承根节点的 interrupt-parent)
+	device_a: device@20000 {
+		reg = <0x0 0x20000 0x0 0x100>;
+		interrupts = <0 20 4>, <0 21 4>;
+	};
+
+	// 设备 B，连接到 sub_intc
+	device_b: device@30000 {
+		reg = <0x0 0x30000 0x0 0x100>;
+		interrupt-parent = <&sub_intc>;
+		interrupts = <5 1>, <6 1>;
+	};
+
+	// 设备 C，interrupt-parent 使用 phandle 引用
+	// 假设 phandle 0x1 是 gic
+	device_c: device@40000 {
+		reg = <0x0 0x40000 0x0 0x100>;
+		interrupt-parent = <0x1>;
+		interrupts = <0 30 4>;
+	};
+};

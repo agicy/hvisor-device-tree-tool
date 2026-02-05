@@ -1,0 +1,6 @@
+/interrupt-controller@10000,interrupt-controller@10000,3,0x0,0x64,0x4,/interrupt-controller@2f000000
+/device@20000,device@20000,3,0x0,0x14,0x4,/interrupt-controller@2f000000
+/device@20000,device@20000,3,0x0,0x15,0x4,/interrupt-controller@2f000000
+/device@30000,device@30000,2,0x5,0x1,/interrupt-controller@10000
+/device@30000,device@30000,2,0x6,0x1,/interrupt-controller@10000
+/device@40000,device@40000,3,0x0,0x1e,0x4,/interrupt-controller@2f000000
