@@ -2,19 +2,28 @@ use crate::dts::tree::{Cell, Data, Node, Property};
 use crate::visitors::Visitor;
 use std::io::Write;
 
-/// DTS 输出访问者
-/// 负责将内存中的树结构写回为符合规范的 .dts 文本格式
+/// A visitor that writes the Device Tree back to a DTS format.
+///
+/// It traverses the tree and writes the nodes and properties to the provided writer
+/// in a standard DTS text format.
 pub struct DtsWriter<W> {
     writer: W,
     is_root: bool,
     indent_level: usize,
     indent_str: String,
-    // true: next child is first (no newline needed)
-    // false: next child is not first (newline needed)
+    // Stack to track if the current node is the first child in its scope.
+    // true: next child is first (no newline needed before it).
+    // false: next child is not first (newline needed before it).
     first_child_stack: Vec<bool>,
 }
 
 impl<W: Write> DtsWriter<W> {
+    /// Creates a new `DtsWriter`.
+    ///
+    /// # Arguments
+    /// * `writer` - The output destination implementing `Write`.
+    /// * `is_root` - Whether to treat the starting node as the root of the file
+    ///               (printing version header etc.).
     pub fn new(writer: W, is_root: bool) -> Self {
         Self {
             writer,
@@ -81,10 +90,10 @@ impl<W: Write> Visitor for DtsWriter<W> {
 
         let indent = self.get_indent();
 
-        // 1. 如果是根节点，先打印版本号
+        // 1. If root, print version header.
         if self.is_root {
             writeln!(self.writer, "/dts-v1/;").unwrap();
-            writeln!(self.writer).unwrap(); // 空行
+            writeln!(self.writer).unwrap(); // Empty line
             self.is_root = false;
         }
 
@@ -100,7 +109,7 @@ impl<W: Write> Visitor for DtsWriter<W> {
                 labels,
                 offset: _,
             } => {
-                // 2. 构建节点头： label1: label2: name {
+                // 2. Build node header: label1: label2: name {
                 let mut prefix = String::new();
 
                 if !labels.is_empty() {
@@ -109,17 +118,17 @@ impl<W: Write> Visitor for DtsWriter<W> {
                         prefix.push_str(": ");
                     }
                 }
-                
+
                 // Root node special case: name is usually empty string or "/" in our parser
                 // but in output we want "/ {"
                 let display_name = if name.is_empty() { "/" } else { name };
-                
+
                 writeln!(self.writer, "{}{}{} {{", indent, prefix, display_name).unwrap();
 
                 // 3. Push stack for this node's children
                 self.first_child_stack.push(true);
 
-                // 4. 打印属性
+                // 4. Print properties
                 self.indent_level += 1;
                 let indent_prop = self.get_indent();
 
@@ -140,7 +149,8 @@ impl<W: Write> Visitor for DtsWriter<W> {
 
                             if let Some(v) = val {
                                 if v.is_empty() {
-                                    writeln!(self.writer, "{}{}{};", indent_prop, prop_prefix, key).unwrap();
+                                    writeln!(self.writer, "{}{}{};", indent_prop, prop_prefix, key)
+                                        .unwrap();
                                 } else {
                                     let val_strs: Vec<String> =
                                         v.iter().map(Self::fmt_data).collect();
@@ -155,7 +165,8 @@ impl<W: Write> Visitor for DtsWriter<W> {
                                     .unwrap();
                                 }
                             } else {
-                                writeln!(self.writer, "{}{}{};", indent_prop, prop_prefix, key).unwrap();
+                                writeln!(self.writer, "{}{}{};", indent_prop, prop_prefix, key)
+                                    .unwrap();
                             }
                         }
                     }
@@ -178,10 +189,6 @@ impl<W: Write> Visitor for DtsWriter<W> {
             self.indent_level -= 1;
             let indent = self.get_indent();
             writeln!(self.writer, "{}}};", indent).unwrap();
-            
-            // 如果是根节点结束，不需要额外换行，因为文件结束了
-            // 但是为了美观，如果是中间节点，可以加？
-            // 现在的实现只是简单闭合
         }
     }
 }

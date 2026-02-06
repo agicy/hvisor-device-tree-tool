@@ -78,12 +78,20 @@ impl From<ParseError> for IncludeError {
 }
 
 /// Stores the information to map a section of the buffer returned by
-/// `include_files` to the original file. Often does not map a whole file, but
-/// only a part starting at at `child_start`. The mapped section starts at
-/// `start()` bytes in the global buffer and continues for `len()` bytes.
+/// `include_files` to the original file.
+///
+/// Often does not map a whole file, but only a part starting at `child_start`.
+/// The mapped section starts at `start()` bytes in the global buffer and continues for `len()` bytes.
 /// `len()` does not indicate the length in bytes that the `IncludeBounds` maps
 /// to in the original file as if the file has been processed by the C
 /// preprocessor whitespace may have been removed.
+///
+/// Fields:
+///   path: The path to the included file.
+///   global_start: The start offset in the global buffer.
+///   child_start: The start offset in the included file.
+///   len: The length of the included content in the global buffer.
+///   method: The method used to include the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncludeBounds {
     path: PathBuf,
@@ -163,18 +171,13 @@ impl IncludeBounds {
         &self.method
     }
 
+    // Splits bounds based on start and end offsets and inserts the new bounds into the list.
     fn split_bounds(bounds: &mut Vec<IncludeBounds>, start: usize, end: usize, offset: usize) {
         let mut remainders: Vec<IncludeBounds> = Vec::new();
 
-        // println!("split s: {} e: {} off: {}", start, end, offset);
-
         for b in bounds.iter_mut() {
-            // println!("b.start: {} b.end: {} b.len: {}", b.start(), b.end(), b.len());
             if b.start() <= start && b.end() >= start {
-                // global_start -- start -- global_end
                 let remainder = b.end() - start - offset;
-
-                // println!("remainder: {}", remainder);
 
                 remainders.push(IncludeBounds {
                     path: b.path.clone(),
@@ -230,12 +233,6 @@ impl IncludeBounds {
                     .filter_map(|e| e.ok());
                     let (c_line, c_col) = byte_offset_to_line_col(b, self.child_start)?;
 
-                    // println!();
-                    // println!("global_start: {}, child_start: {}",
-                    //          self.global_start, self.child_start);
-                    // println!("g_line: {}, s_line: {}, c_line: {}", g_line, s_line, c_line);
-                    // println!("g_col: {}, s_col: {}, c_col: {}", g_col, s_col, c_col);
-
                     let line = g_line - s_line + c_line;
                     //TODO: find more rigorous way of testing this
                     let col = if g_line == s_line {
@@ -275,6 +272,7 @@ pub fn get_bounds_containing_offset(
     }
 }
 
+// Represents a C preprocessor linemarker.
 #[derive(Debug, PartialEq)]
 struct Linemarker {
     child_line: usize,
@@ -282,6 +280,7 @@ struct Linemarker {
     flag: Option<LinemarkerFlag>,
 }
 
+// Flags for C preprocessor linemarkers.
 #[derive(Debug, PartialEq)]
 enum LinemarkerFlag {
     Start,
@@ -290,6 +289,7 @@ enum LinemarkerFlag {
     Extern,
 }
 
+// Parses a linemarker from the input.
 fn parse_linemarker(input: &[u8]) -> IResult<&[u8], Linemarker> {
     let (input, _) = tag("#")(input)?;
     let (input, _) = opt(tag("line"))(input)?;
@@ -320,6 +320,7 @@ fn parse_linemarker(input: &[u8]) -> IResult<&[u8], Linemarker> {
     ))
 }
 
+// Finds the start of a linemarker in the input.
 fn find_linemarker_start(input: &[u8]) -> IResult<&[u8], &[u8]> {
     // nom 7 way to search for substring
     // We want to find "# " or "#line "
@@ -330,12 +331,14 @@ fn find_linemarker_start(input: &[u8]) -> IResult<&[u8], &[u8]> {
     Ok((rem, pre))
 }
 
+// Finds and parses a linemarker in the input.
 fn find_linemarker(input: &[u8]) -> IResult<&[u8], (&[u8], Linemarker)> {
     let (input, pre) = find_linemarker_start(input)?;
     let (input, marker) = parse_linemarker(input)?;
     Ok((input, (pre, marker)))
 }
 
+// Parses all linemarkers in the buffer and updates the bounds.
 fn parse_linemarkers(
     buf: &[u8],
     bounds: &mut Vec<IncludeBounds>,
@@ -373,6 +376,7 @@ fn parse_linemarkers(
     Ok(())
 }
 
+// Parses a /include/ statement.
 fn parse_include(input: &[u8]) -> IResult<&[u8], String> {
     preceded(
         tag("/include/"),
@@ -383,6 +387,7 @@ fn parse_include(input: &[u8]) -> IResult<&[u8], String> {
     )(input)
 }
 
+// Finds the first /include/ statement in the buffer.
 fn find_include(buf: &[u8]) -> Option<(&[u8], PathBuf, &[u8])> {
     for (index, win) in buf.windows("/include/".len()).enumerate() {
         if win == b"/include/" {
@@ -454,9 +459,6 @@ pub fn include_files<P: AsRef<Path>, I: AsRef<Path>>(
         let mut string_buffer = String::new();
         file.read_to_string(&mut string_buffer)?;
 
-        // println!("{}", path.display());
-        // println!("{}\n", string_buffer);
-
         let mut buf = string_buffer.as_bytes();
 
         fn first_linemarker(input: &[u8]) -> IResult<&[u8], (&[u8], Linemarker)> {
@@ -494,7 +496,6 @@ pub fn include_files<P: AsRef<Path>, I: AsRef<Path>>(
 
             bound
         } else {
-            // println!("main_offset {}", main_offset);
             IncludeBounds {
                 path: path.to_owned(),
                 global_start: main_offset,
@@ -515,11 +516,6 @@ pub fn include_files<P: AsRef<Path>, I: AsRef<Path>>(
             buffer.extend_from_slice(pre);
 
             let offset = pre.len();
-            // println!("Offset: {}", offset);
-            // println!("{}", String::from_utf8_lossy(&buffer));
-            // println!("{:#?}", bounds);
-
-            // println!("buffer.len: {} main_offset: {}", buffer.len(), main_offset);
             let total_len = buffer.len() + main_offset;
             let (sub_buf, sub_bounds) = _include_files(&included_path, include_dirs, total_len)?;
             buffer.extend(sub_buf);
@@ -534,13 +530,9 @@ pub fn include_files<P: AsRef<Path>, I: AsRef<Path>>(
                 .ok_or_else(|| IncludeError::NoBoundReturned(included_path.clone()))?;
             let eaten_len = (buf.len() - offset) - rem.len();
 
-            // println!("{:#?}", sub_bounds);
             IncludeBounds::split_bounds(&mut bounds, inc_start, inc_end, eaten_len);
             bounds.extend_from_slice(&sub_bounds);
             bounds.sort();
-
-            // println!("After split");
-            // println!("{:#?}", bounds);
 
             buf = rem;
         }

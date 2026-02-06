@@ -2,6 +2,11 @@ use crate::dts::tree::Node;
 use crate::visitors::Visitor;
 use indexmap::IndexMap;
 
+/// A visitor that filters nodes based on a predicate.
+///
+/// It constructs a new tree containing only the nodes (and their subtrees)
+/// for which the predicate returns `false`. If the predicate returns `true`,
+/// the node and its children are excluded.
 pub struct NodeFilter<F>
 where
     F: Fn(&Node) -> bool,
@@ -18,6 +23,11 @@ impl<F> NodeFilter<F>
 where
     F: Fn(&Node) -> bool,
 {
+    /// Creates a new `NodeFilter` with the given predicate.
+    ///
+    /// # Arguments
+    /// * `predicate` - A function that returns `true` if the node should be filtered out (excluded),
+    ///                 and `false` if it should be kept.
     pub fn new(predicate: F) -> Self {
         Self {
             predicate,
@@ -42,7 +52,7 @@ where
         if let Node::Existing { children, .. } = &mut new_node {
             *children = IndexMap::new();
         }
-        
+
         self.stack.push(new_node);
         true
     }

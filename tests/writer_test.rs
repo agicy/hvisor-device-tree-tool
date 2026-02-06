@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use visitors::Walker;
 use visitors::writer::DtsWriter;
 
+// Tests the DTS writing logic.
+//
+// Verifies that the tree is correctly serialized back to DTS format.
 #[test]
 fn test_writer() {
     let path = PathBuf::from("tests/data/test_writer.dts");

@@ -19,7 +19,7 @@ use std::io::Read;
 use std::iter::once;
 use std::path::PathBuf;
 
-/// Various errors that can occur why parsing.
+/// Various errors that can occur during parsing.
 // TODO: impl Display and Error - issue 1.1
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)]
@@ -28,16 +28,21 @@ pub enum ParseError {
     NotFound,
     /// No more input was available where more was expected for parsing.
     IncompleteInput,
-    /// Some `nom` error occurred. Helpful, I know. This is only temporary.
+    /// Some `nom` error occurred.
     NomError,
 }
 
-/// Returns the byte offset of the starting character of line within the iterator.
+/// Returns the byte offset of the starting character of a line within the iterator.
 ///
-/// Lines are assumed to be 1 indexed, and offsets are 0 indexed.
+/// Lines are assumed to be 1-indexed, and offsets are 0-indexed.
 ///
-/// # Errors
-/// Will return an `ParseError::NotFound` if the line cannot be found.
+/// # Arguments
+/// * `bytes` - An iterator over the bytes of the file.
+/// * `line` - The 1-indexed line number to find the offset for.
+///
+/// # Returns
+/// * `Ok(usize)` - The byte offset of the start of the line.
+/// * `Err(ParseError::NotFound)` - If the line cannot be found.
 ///
 /// # Example
 /// ```rust,ignore
@@ -70,10 +75,15 @@ where
 
 /// Returns the line and column of the character at the offset within the iterator.
 ///
-/// Offsets are assumed to be 0 indexed, and lines and columns are 1 indexed.
+/// Offsets are assumed to be 0-indexed, and lines and columns are 1-indexed.
 ///
-/// # Errors
-/// Will return an `ParseError::NotFound` if the offset is past the end of the iterator.
+/// # Arguments
+/// * `bytes` - An iterator over the bytes of the file.
+/// * `offset` - The 0-indexed byte offset to convert.
+///
+/// # Returns
+/// * `Ok((usize, usize))` - A tuple containing the (line, column).
+/// * `Err(ParseError::NotFound)` - If the offset is past the end of the iterator.
 ///
 /// # Example
 /// ```rust,ignore
@@ -113,8 +123,15 @@ where
 
 /// Parses a DTS file from a path or stdin if path is None.
 ///
-/// # Errors
-/// Returns an error if reading fails or parsing fails.
+/// This function reads the content of the file (or stdin), parses it using the `parser` module,
+/// and returns the resulting `DTInfo` tree. It handles merging amendments (overlays) into the main tree.
+///
+/// # Arguments
+/// * `path` - An optional path to the DTS file. If `None`, reads from stdin.
+///
+/// # Returns
+/// * `Ok(tree::DTInfo)` - The parsed Device Tree information.
+/// * `Err(anyhow::Error)` - If reading fails or parsing fails.
 pub fn parse_dts(path: Option<&PathBuf>) -> Result<tree::DTInfo> {
     let mut buffer = Vec::new();
 

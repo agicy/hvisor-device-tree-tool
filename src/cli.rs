@@ -5,11 +5,17 @@ use crate::dts;
 use crate::dts::tree::{Data, Node, Property};
 use crate::visitors::writer::DtsWriter;
 use crate::visitors::{
-    dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
-    reg_extractor::RegExtractor, sorter::SortByReference, Walker,
+    Walker, dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
+    reg_extractor::RegExtractor, sorter::SortByReference,
 };
 use clap::{Parser, Subcommand};
 
+// Command-line interface definition for the application.
+//
+// This struct uses `clap` to parse command-line arguments and subcommands.
+//
+// Fields:
+//   command: The subcommand to execute.
 #[derive(Parser)]
 #[command(name = "hvisor-device-tree-tool")]
 #[command(version = "0.1.0")]
@@ -19,38 +25,60 @@ struct Cli {
     command: Commands,
 }
 
+// Available subcommands for the application.
 #[derive(Subcommand)]
 enum Commands {
-    /// Sort nodes by phandle reference
+    // Sort nodes by phandle reference.
+    //
+    // This command reorders nodes based on their dependencies (phandles).
     Sort {
-        /// Input DTS file (optional, defaults to stdin)
+        // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
-    /// Extract register information
+    // Extract register information.
+    //
+    // This command parses the DTS and extracts register addresses and sizes.
     ExtractRegs {
-        /// Input DTS file (optional, defaults to stdin)
+        // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
-    /// Extract interrupt information
+    // Extract interrupt information.
+    //
+    // This command parses the DTS and extracts interrupt configurations.
     ExtractInterrupts {
-        /// Input DTS file (optional, defaults to stdin)
+        // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
-    /// Extract dependency information
+    // Extract dependency information.
+    //
+    // This command analyzes the dependencies between nodes.
     Dependency {
-        /// Input DTS file (optional, defaults to stdin)
+        // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
-    /// Filter disabled nodes
+    // Filter disabled nodes.
+    //
+    // This command removes nodes that have `status = "disabled"`.
     Filter {
-        /// Input DTS file (optional, defaults to stdin)
+        // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
 }
 
+// Executes the CLI application.
+//
+// This function parses the command-line arguments and dispatches the execution
+// to the appropriate handler based on the selected subcommand.
 pub fn run() {
     let cli = Cli::parse();
 
+    // Helper function to parse the DTS file or stdin.
+    //
+    // Arguments:
+    //   input: Optional path to the input file.
+    //
+    // Returns:
+    //   The parsed DTS tree. Exits the process if parsing fails.
     let get_tree = |input: Option<&PathBuf>| {
         dts::parse_dts(input).unwrap_or_else(|e| {
             eprintln!("{}", e);
@@ -62,10 +90,10 @@ pub fn run() {
         Commands::Sort { input } => {
             let tree = get_tree(input.as_ref());
             let mut sorter = SortByReference::new();
-            // Clone root to be safe, but Walker now takes &Node
+            // Walk the tree to sort nodes.
             Walker::walk(&tree.root, "/", &mut sorter);
             if let Some(new_root) = sorter.root {
-                // Use DtsWriter to print the new tree
+                // Use DtsWriter to print the sorted tree to stdout.
                 let mut buffer = Vec::new();
                 let mut writer = DtsWriter::new(&mut buffer, true);
                 Walker::walk(&new_root, "/", &mut writer);
@@ -75,23 +103,27 @@ pub fn run() {
         Commands::ExtractRegs { input } => {
             let tree = get_tree(input.as_ref());
             let mut extractor = RegExtractor::new();
+            // Walk the tree to extract register information.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());
         }
         Commands::ExtractInterrupts { input } => {
             let tree = get_tree(input.as_ref());
             let mut extractor = InterruptsExtractor::new();
+            // Walk the tree to extract interrupt information.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());
         }
         Commands::Dependency { input } => {
             let tree = get_tree(input.as_ref());
             let mut extractor = DependencyExtractor::new();
+            // Walk the tree to extract dependencies.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());
         }
         Commands::Filter { input } => {
             let tree = get_tree(input.as_ref());
+            // Define a predicate to identify disabled nodes.
             let predicate = |node: &Node| -> bool {
                 if let Node::Existing { proplist, .. } = node {
                     if let Some(Property::Existing {
@@ -110,8 +142,10 @@ pub fn run() {
                 false
             };
             let mut filter = NodeFilter::new(predicate);
+            // Walk the tree to filter out disabled nodes.
             Walker::walk(&tree.root, "/", &mut filter);
             if let Some(new_root) = filter.root {
+                // Use DtsWriter to print the filtered tree to stdout.
                 let mut buffer = Vec::new();
                 let mut writer = DtsWriter::new(&mut buffer, true);
                 Walker::walk(&new_root, "/", &mut writer);

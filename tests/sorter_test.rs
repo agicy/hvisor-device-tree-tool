@@ -4,6 +4,9 @@ use visitors::Walker;
 use visitors::sorter::SortByReference;
 use visitors::writer::DtsWriter;
 
+// Tests the node sorting logic.
+//
+// Verifies that nodes are topologically sorted based on their phandle references.
 #[test]
 fn test_sorter() {
     let path = PathBuf::from("tests/data/test_sorter.dts");
@@ -19,11 +22,11 @@ fn test_sorter() {
     let mut output = Vec::new();
     let mut writer = DtsWriter::new(&mut output, true); // Use tabs to match source
     Walker::walk(&sorted_root, "/", &mut writer);
-    
+
     let output_str = String::from_utf8(output).expect("Invalid UTF-8 output");
 
     let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
-    
+
     // Normalize newlines and trim for comparison
     assert_eq!(output_str.trim(), expected.trim());
 }

@@ -11,7 +11,7 @@ use std::fmt;
 pub trait Labeled {
     /// Add a label to an object.
     ///
-    /// #Errors
+    /// # Errors
     /// May fail if a variation of an object does not allow labels.
     // TODO: code examples
     fn add_label(&mut self, label: &str) -> Result<(), ()>;
@@ -29,8 +29,9 @@ pub trait Offset {
     fn get_offset(&self) -> usize;
 }
 
-/// The device tree info as specified by the Device Tree Specification. Includes
-/// the reserved memory info, the boot CPU ID, and the root node of the tree.
+/// The device tree info as specified by the Device Tree Specification.
+///
+/// Includes the reserved memory info, the boot CPU ID, and the root node of the tree.
 /// The root node may not include any changes made by node specifications listed
 /// after the root node. These amendments are returned separately. See
 /// `parser::parse_dt`.

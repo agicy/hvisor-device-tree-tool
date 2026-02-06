@@ -5,6 +5,9 @@ use visitors::Walker;
 use visitors::filter::NodeFilter;
 use visitors::writer::DtsWriter;
 
+// Tests the node filtering logic.
+//
+// Verifies that nodes with `status = "disabled"` are correctly removed from the tree.
 #[test]
 fn test_filter() {
     let path = PathBuf::from("tests/data/test_filter.dts");

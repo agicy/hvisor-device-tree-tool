@@ -15,7 +15,7 @@ use nom::character::complete::{
     alpha1, char, digit1, hex_digit1, line_ending, multispace1, not_line_ending, oct_digit1, space1,
 };
 use nom::combinator::{map, map_res, opt, peek, recognize, rest, value, verify};
-use nom::multi::{many0, many1, separated_list1};
+use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, terminated, tuple};
 use nom::{IResult, Parser};
 
@@ -53,6 +53,7 @@ fn not_line_ending_str(input: &[u8]) -> IResult<&[u8], &[u8]> {
     not_line_ending(input)
 }
 
+// Consumes comments and whitespace.
 fn eat_junk(input: &[u8]) -> IResult<&[u8], ()> {
     value(
         (),
@@ -85,6 +86,7 @@ where
     preceded(eat_junk, inner)
 }
 
+// Infix operators for C-style expressions.
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum OprInfix {
     Multiply,
@@ -113,6 +115,7 @@ enum OprInfix {
 }
 
 impl OprInfix {
+    // Applies the infix operator to two operands.
     fn apply(&self, a: u64, b: u64) -> u64 {
         match *self {
             OprInfix::Multiply => a * b,
@@ -190,6 +193,7 @@ impl OprInfix {
     }
 }
 
+// Parses an infix operator.
 fn opr_infix(input: &[u8]) -> IResult<&[u8], OprInfix> {
     alt((
         value(OprInfix::LeftShift, tag("<<")),
@@ -213,6 +217,7 @@ fn opr_infix(input: &[u8]) -> IResult<&[u8], OprInfix> {
     ))(input)
 }
 
+// Prefix operators for C-style expressions.
 #[derive(PartialEq, Debug, Clone, Copy)]
 enum OprPrefix {
     Negate,
@@ -221,6 +226,7 @@ enum OprPrefix {
 }
 
 impl OprPrefix {
+    // Applies the prefix operator to an operand.
     fn apply(&self, a: u64) -> u64 {
         match *self {
             OprPrefix::Negate => a.wrapping_neg(),
@@ -236,6 +242,7 @@ impl OprPrefix {
     }
 }
 
+// Parses a prefix operator.
 fn opr_prefix(input: &[u8]) -> IResult<&[u8], OprPrefix> {
     alt((
         value(OprPrefix::Not, tag("!")),
@@ -244,6 +251,7 @@ fn opr_prefix(input: &[u8]) -> IResult<&[u8], OprPrefix> {
     ))(input)
 }
 
+// Tokens used for parsing C-style expressions.
 #[derive(Debug)]
 enum Token {
     Number(u64),
@@ -252,6 +260,7 @@ enum Token {
     Paren,
 }
 
+// Parses a C-style expression and evaluates it to a u64.
 fn parse_c_expr(input: &[u8]) -> IResult<&[u8], u64> {
     let mut stack = Vec::new();
     let mut buf = input;
@@ -462,6 +471,7 @@ fn parse_c_expr(input: &[u8]) -> IResult<&[u8], u64> {
     }
 }
 
+// Parses an integer (hex, octal, or decimal) with optional suffixes.
 fn integer(input: &[u8]) -> IResult<&[u8], u64> {
     terminated(
         alt((
@@ -502,6 +512,7 @@ fn is_label_char(c: u8) -> bool {
     nom::character::is_alphanumeric(c) || c == b'_'
 }
 
+// Parses a label.
 fn parse_label(input: &[u8]) -> IResult<&[u8], String> {
     map(
         map_res(
@@ -512,6 +523,7 @@ fn parse_label(input: &[u8]) -> IResult<&[u8], String> {
     )(input)
 }
 
+// Parses a reference (phandle or label ref).
 fn parse_ref(input: &[u8]) -> IResult<&[u8], String> {
     alt((
         preceded(
@@ -564,7 +576,8 @@ fn transform(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
     )(input)
 }
 
-// Custom implementation since escaped_transform requires a specific control flow
+/// Parses and escapes a C-style string.
+/// Custom implementation since escaped_transform requires a specific control flow
 pub fn escape_c_string(input: &[u8]) -> IResult<&[u8], String> {
     map_res(
         alt((
@@ -578,6 +591,7 @@ pub fn escape_c_string(input: &[u8]) -> IResult<&[u8], String> {
     )(input)
 }
 
+/// Parses and escapes a C-style char.
 pub fn escape_c_char(input: &[u8]) -> IResult<&[u8], u8> {
     alt((
         value(0x07, tag("\\a")),
@@ -605,6 +619,7 @@ pub fn escape_c_char(input: &[u8]) -> IResult<&[u8], u8> {
     ))(input)
 }
 
+// Parses a cell, which can be a number or a reference.
 fn parse_cell(bits: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Cell> {
     move |input: &[u8]| {
         ws(alt((
@@ -632,6 +647,7 @@ fn parse_cell(bits: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Cell> {
     }
 }
 
+// Parses a /memreserve/ block.
 fn parse_mem_reserve(input: &[u8]) -> IResult<&[u8], ReserveInfo> {
     ws(map(
         tuple((
@@ -649,6 +665,7 @@ fn parse_mem_reserve(input: &[u8]) -> IResult<&[u8], ReserveInfo> {
     ))(input)
 }
 
+// Parses data cells (array of cells).
 fn parse_data_cells(input: &[u8]) -> IResult<&[u8], Data> {
     let (input, bits) = verify(
         map(
@@ -670,11 +687,13 @@ fn parse_data_cells(input: &[u8]) -> IResult<&[u8], Data> {
     Ok((input, Data::Cells(bits as usize, val)))
 }
 
+// Helper enum for items in a node (Property or Node).
 enum Item {
     Prop(Property),
     Node(Node),
 }
 
+// Parses the contents of a node.
 fn parse_contents(
     input_len: usize,
 ) -> impl FnMut(&[u8]) -> IResult<&[u8], (Vec<Property>, Vec<Node>)> {
@@ -692,6 +711,7 @@ fn parse_contents(
     }
 }
 
+// Parses either a property or a node.
 fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
     move |input: &[u8]| {
         let (input, offset_start) = peek(rest)(input)?;
@@ -753,6 +773,7 @@ fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], I
     }
 }
 
+// Parses an item in a node, including deleted nodes/properties.
 fn parse_item(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
     move |input: &[u8]| {
         ws(alt((
@@ -797,6 +818,7 @@ fn parse_item(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
     }
 }
 
+// Parses a byte array (e.g. [ 00 11 22 ]).
 fn parse_data_bytes(input: &[u8]) -> IResult<&[u8], Data> {
     let (input, _) = char::<&[u8], nom::error::Error<&[u8]>>('[')(input)?;
     let mut current_input = input;
@@ -810,13 +832,17 @@ fn parse_data_bytes(input: &[u8]) -> IResult<&[u8], Data> {
 
         let (next_input, hex_str) = map_res(recognize(take(2usize)), str::from_utf8)(next_input)?;
         let byte = u8::from_str_radix(hex_str, 16).map_err(|_| {
-            nom::Err::Error(nom::error::Error::new(next_input, nom::error::ErrorKind::Tag))
+            nom::Err::Error(nom::error::Error::new(
+                next_input,
+                nom::error::ErrorKind::Tag,
+            ))
         })?;
         bytes.push(byte);
         current_input = next_input;
     }
 }
 
+// Parses property data.
 fn parse_data(input: &[u8]) -> IResult<&[u8], Data> {
     ws(alt((
         delimited(char('"'), map(escape_c_string, Data::String), char('"')),
@@ -876,6 +902,7 @@ fn parse_prop(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Property>
     }
 }
 
+// Parses a node definition.
 fn parse_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     move |input: &[u8]| {
         ws(alt((
@@ -934,11 +961,17 @@ fn parse_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     }
 }
 
+// Parses a node amendment (e.g. &label { ... }).
 fn parse_amend(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     move |input: &[u8]| {
         ws(alt((
             map(
-                tuple((peek(rest), tag("/delete-node/"), ws(parse_ref), ws(char(';')))),
+                tuple((
+                    peek(rest),
+                    tag("/delete-node/"),
+                    ws(parse_ref),
+                    ws(char(';')),
+                )),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
                     Node::Deleted {
@@ -984,10 +1017,12 @@ fn parse_amend(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     }
 }
 
+// Parses the root device tree.
 fn parse_device_tree(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     move |input: &[u8]| ws(preceded(peek(ws(char('/'))), parse_node(input_len)))(input)
 }
 
+// Main parser function.
 fn parse_dts(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], (DTInfo, Vec<Node>)> {
     move |input: &[u8]| {
         ws(map(
@@ -1048,18 +1083,20 @@ pub fn parse_dt(source: &[u8]) -> Result<ParseResult<'_>, ParseError> {
         Ok((remaining, (tree, amends))) => {
             // Try to consume any remaining junk (whitespace, comments, etc.)
             let (final_remaining, _) = eat_junk(remaining).unwrap_or((remaining, ()));
-            
+
             if !final_remaining.is_empty() {
-                 let preview_len = std::cmp::min(100, final_remaining.len());
-                 panic!("Remaining input (length {}): {:?}", final_remaining.len(), String::from_utf8_lossy(&final_remaining[..preview_len]));
-             }
+                let preview_len = std::cmp::min(100, final_remaining.len());
+                panic!(
+                    "Remaining input (length {}): {:?}",
+                    final_remaining.len(),
+                    String::from_utf8_lossy(&final_remaining[..preview_len])
+                );
+            }
 
             Ok(ParseResult::Complete(tree, amends))
         }
         Err(nom::Err::Incomplete(_)) => Err(ParseError::IncompleteInput),
-        Err(nom::Err::Error(_e)) | Err(nom::Err::Failure(_e)) => {
-            Err(ParseError::NomError)
-        }
+        Err(nom::Err::Error(_e)) | Err(nom::Err::Failure(_e)) => Err(ParseError::NomError),
     }
 }
 
