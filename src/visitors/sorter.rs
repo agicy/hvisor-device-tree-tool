@@ -1,11 +1,14 @@
-use crate::dts::tree::{Data, Node, Property};
+use crate::dts::tree::{Cell, Data, Node, Property};
 use crate::visitors::Visitor;
 use indexmap::IndexMap;
 use petgraph::algo::toposort;
 use petgraph::graph::DiGraph;
 use std::collections::HashMap;
 
-pub struct SortByReference;
+pub struct SortByReference {
+    stack: Vec<Node>,
+    pub root: Option<Node>,
+}
 
 enum Dependency {
     Label(String),
@@ -13,7 +16,20 @@ enum Dependency {
 
 impl SortByReference {
     pub fn new() -> Self {
-        Self
+        Self {
+            stack: Vec::new(),
+            root: None,
+        }
+    }
+
+    // Recursively collect all labels in the subtree rooted at `node`
+    fn collect_labels_recursive(node: &Node, labels_out: &mut Vec<String>) {
+        if let Node::Existing { labels, children, .. } = node {
+            labels_out.extend(labels.clone());
+            for child in children.values() {
+                Self::collect_labels_recursive(child, labels_out);
+            }
+        }
     }
 
     fn topological_sort_map(children: &IndexMap<String, Node>) -> IndexMap<String, Node> {
@@ -24,18 +40,16 @@ impl SortByReference {
             indices.insert(name.as_str(), graph.add_node(name.as_str()));
         }
 
-        // Collect phandles and labels
-        let mut phandle_map = HashMap::new(); // phandle -> name
-        let mut label_map = HashMap::new(); // label -> name
+        // Collect phandles and labels (including deep labels)
+        // We map each label found in a child's subtree to that child's name.
+        let mut label_map = HashMap::new(); // label -> child_name
 
         for (name, node) in children {
-            if let Some(phandle) = Self::get_phandle(node) {
-                phandle_map.insert(phandle, name.as_str());
-            }
-            if let Node::Existing { labels, .. } = node {
-                for label in labels {
-                    label_map.insert(label.clone(), name.as_str());
-                }
+            let mut labels = Vec::new();
+            Self::collect_labels_recursive(node, &mut labels);
+            
+            for label in labels {
+                label_map.insert(label, name.as_str());
             }
         }
 
@@ -51,7 +65,7 @@ impl SortByReference {
 
                 if let Some(target_name) = target_name {
                     if let Some(target_idx) = indices.get(target_name) {
-                        // Avoid self-cycles
+                        // Avoid self-cycles (if a node depends on itself or its own subtree)
                         if source_idx != *target_idx {
                             graph.update_edge(*target_idx, source_idx, ());
                         }
@@ -69,7 +83,8 @@ impl SortByReference {
                         sorted_map.insert(k.clone(), v.clone());
                     }
                 }
-                // Add any nodes that might have been missed
+                // Add any nodes that might have been missed (e.g. disconnected? toposort handles all)
+                // Just in case
                 if sorted_map.len() != children.len() {
                     for (k, v) in children {
                         if !sorted_map.contains_key(k) {
@@ -81,44 +96,52 @@ impl SortByReference {
             }
             Err(_) => {
                 // Cycle detected or error, return original order
+                // Optionally print a warning
+                eprintln!("Warning: Cycle detected during topological sort, keeping original order.");
                 children.clone()
             }
         }
     }
 
-    fn get_phandle(node: &Node) -> Option<u32> {
-        if let Node::Existing { proplist, .. } = node {
-            if let Some(Property::Existing {
-                val: Some(data), ..
-            }) = proplist.get("phandle")
-            {
-                if data.len() == 1 {
-                    if let Data::Cells(_bits, cells) = &data[0] {
-                        if cells.len() == 1 {
-                            if let crate::dts::tree::Cell::Num(c) = cells[0] {
-                                return Some(c as u32);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
     fn find_dependencies(node: &Node) -> Vec<Dependency> {
         let mut deps = Vec::new();
+        // Common dependency properties
+        let dep_props = [
+            "clocks",
+            "interrupt-parent",
+            "power-domains",
+            "phys",
+            "resets",
+            "dmas",
+            "iommus",
+            "mboxes",
+            "interconnects",
+            // Add others if needed
+        ];
+        
         if let Node::Existing { proplist, .. } = node {
-            for prop in proplist.values() {
-                if let Property::Existing {
-                    val: Some(data), ..
-                } = prop
-                {
-                    for d in data {
-                        if let Data::Reference(label, _) = d {
-                            deps.push(Dependency::Label(label.clone()));
-                        }
-                    }
+            for (prop_name, prop) in proplist {
+                 if let Property::Existing {
+                     val: Some(data), ..
+                 } = prop
+                 {
+                     if dep_props.contains(&prop_name.as_str()) {
+                          for d in data {
+                             match d {
+                                 Data::Reference(label, _) => {
+                                     deps.push(Dependency::Label(label.clone()));
+                                 }
+                                 Data::Cells(_, cells) => {
+                                     for c in cells {
+                                         if let Cell::Ref(label, _) = c {
+                                             deps.push(Dependency::Label(label.clone()));
+                                         }
+                                     }
+                                 }
+                                 _ => {}
+                             }
+                          }
+                     }
                 }
             }
         }
@@ -127,13 +150,51 @@ impl SortByReference {
 }
 
 impl Visitor for SortByReference {
-    fn enter_node(&mut self, _name: &str, node: &mut Node) -> bool {
-        if let Node::Existing { children, .. } = node {
-            if children.len() > 1 {
-                let sorted = Self::topological_sort_map(children);
-                *children = sorted;
-            }
+    fn enter_node(&mut self, _name: &str, node: &Node) -> bool {
+        // Clone node (empty children)
+        let mut new_node = node.clone();
+        if let Node::Existing { children, .. } = &mut new_node {
+            *children = IndexMap::new();
         }
+        self.stack.push(new_node);
         true
     }
+
+    fn exit_node(&mut self, _name: &str, _node: &Node) {
+        if let Some(mut new_node) = self.stack.pop() {
+            // Sort children before adding to parent
+            if let Node::Existing { children, .. } = &mut new_node {
+                if children.len() > 1 {
+                    let sorted = Self::topological_sort_map(children);
+                    *children = sorted;
+                }
+            }
+
+            if self.stack.is_empty() {
+                self.root = Some(new_node);
+            } else {
+                let parent = self.stack.last_mut().unwrap();
+                if let Node::Existing { children, .. } = parent {
+                    children.insert(_name.to_string(), new_node);
+                }
+            }
+        }
+    }
 }
+
+// 扩展方法，用于生成排序后的输出
+// 这需要结合 Writer 的逻辑。
+// 但是 Sorter 本身只负责修改 Tree。
+// CLI 命令逻辑是：Sort -> 打印。
+// 如果用户想要 "sort 预期的逻辑是根据 dependency 的结果对节点排序，然后输出的是设备树。"
+// 那么我们应该提供一个 output 方法，或者在 CLI 中，sort 完之后调用 Writer。
+// 
+// 当前实现是 Sorter 是一个 Visitor，它 *in-place* 修改了 tree。
+// 如果我们想要输出，可以在 walk 结束后，再 walk 一遍 Writer。
+// 或者 Sorter 本身包含一个 Writer？
+// 通常做法是 pipeline： Parser -> Sorter (modify tree) -> Writer (output tree)。
+// 
+// 用户的 prompt 暗示 "sort 预期的逻辑... 然后输出的是设备树"。
+// 这可能意味着 `test_sorter` 应该验证输出的 DTS 内容。
+// 目前 `test_sorter` 只是打印了节点名。
+// 我们应该修改 `test_sorter` 来使用 `DtsWriter` 输出完整的树，并与 `expected` 对比。

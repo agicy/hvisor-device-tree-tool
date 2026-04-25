@@ -1,0 +1,25 @@
+/dts-v1/;
+
+/ {
+	model = "Sorter Test Board";
+	compatible = "hvisor,sorter-board";
+
+	device_a: device-a {
+		compatible = "device-a";
+
+		clk: clock {
+			#clock-cells = <0x0>;
+		};
+	};
+
+	device_b: device-b {
+		compatible = "device-b";
+		phys = <&device_a>;
+	};
+
+	device_c: device-c {
+		compatible = "device-c";
+		clocks = <&clk>;
+		resets = <&device_b>;
+	};
+};

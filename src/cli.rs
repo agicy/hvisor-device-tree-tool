@@ -3,6 +3,7 @@ use std::process;
 
 use crate::dts;
 use crate::dts::tree::{Data, Node, Property};
+use crate::visitors::writer::DtsWriter;
 use crate::visitors::{
     dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
     reg_extractor::RegExtractor, sorter::SortByReference, Walker,
@@ -59,20 +60,29 @@ pub fn run() {
 
     match cli.command {
         Commands::Sort { input } => {
-            let mut tree = get_tree(input.as_ref());
+            let tree = get_tree(input.as_ref());
             let mut sorter = SortByReference::new();
-            Walker::walk(&mut tree.root, "/", &mut sorter);
-            println!("{:#?}", tree);
+            // Clone root to be safe, but Walker now takes &Node
+            Walker::walk(&tree.root, "/", &mut sorter);
+            if let Some(new_root) = sorter.root {
+                // Use DtsWriter to print the new tree
+                let mut buffer = Vec::new();
+                let mut writer = DtsWriter::new(&mut buffer, true);
+                Walker::walk(&new_root, "/", &mut writer);
+                println!("{}", String::from_utf8_lossy(&buffer));
+            }
         }
         Commands::ExtractRegs { input } => {
-            let mut tree = get_tree(input.as_ref());
+            let tree = get_tree(input.as_ref());
             let mut extractor = RegExtractor::new();
-            Walker::walk(&mut tree.root, "/", &mut extractor);
+            Walker::walk(&tree.root, "/", &mut extractor);
+            println!("{}", extractor.output());
         }
         Commands::ExtractInterrupts { input } => {
-            let mut tree = get_tree(input.as_ref());
+            let tree = get_tree(input.as_ref());
             let mut extractor = InterruptsExtractor::new();
-            Walker::walk(&mut tree.root, "/", &mut extractor);
+            Walker::walk(&tree.root, "/", &mut extractor);
+            println!("{}", extractor.output());
         }
         Commands::Dependency { input } => {
             let tree = get_tree(input.as_ref());
@@ -81,7 +91,7 @@ pub fn run() {
             println!("{}", extractor.output());
         }
         Commands::Filter { input } => {
-            let mut tree = get_tree(input.as_ref());
+            let tree = get_tree(input.as_ref());
             let predicate = |node: &Node| -> bool {
                 if let Node::Existing { proplist, .. } = node {
                     if let Some(Property::Existing {
@@ -100,8 +110,13 @@ pub fn run() {
                 false
             };
             let mut filter = NodeFilter::new(predicate);
-            Walker::walk(&mut tree.root, "/", &mut filter);
-            println!("{:#?}", tree);
+            Walker::walk(&tree.root, "/", &mut filter);
+            if let Some(new_root) = filter.root {
+                let mut buffer = Vec::new();
+                let mut writer = DtsWriter::new(&mut buffer, true);
+                Walker::walk(&new_root, "/", &mut writer);
+                println!("{}", String::from_utf8_lossy(&buffer));
+            }
         }
     }
 }

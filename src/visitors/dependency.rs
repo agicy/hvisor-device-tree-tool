@@ -1,6 +1,6 @@
 use crate::dts::tree::{Data, Node, Property, Cell};
 use crate::visitors::Visitor;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -109,7 +109,7 @@ impl DependencyExtractor {
 }
 
 impl Visitor for DependencyExtractor {
-    fn enter_node(&mut self, name: &str, node: &mut Node) -> bool {
+    fn enter_node(&mut self, name: &str, node: &Node) -> bool {
         // 更新路径栈
         // 根节点名为 "" 或 "/"
         let node_name = if name.is_empty() { "/" } else { name };
@@ -130,7 +130,7 @@ impl Visitor for DependencyExtractor {
         true
     }
 
-    fn exit_node(&mut self, _name: &str, _node: &mut Node) {
+    fn exit_node(&mut self, _name: &str, _node: &Node) {
         self.path_stack.pop();
     }
 }

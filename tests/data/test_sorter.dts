@@ -1,0 +1,28 @@
+/dts-v1/;
+
+/ {
+	model = "Sorter Test Board";
+	compatible = "hvisor,sorter-board";
+
+	// 依赖链: device_c -> device_b -> device_a
+	// 期望顺序: device_a, device_b, device_c
+
+	device_c: device-c {
+		compatible = "device-c";
+		clocks = <&clk>; // device_c 依赖 clk (device_a 的子节点)
+		resets = <&device_b>; // 强制 device_c 依赖 device_b
+	};
+
+	device_b: device-b {
+		compatible = "device-b";
+		phys = <&device_a>; // device_b 依赖 device_a
+	};
+
+	device_a: device-a {
+		compatible = "device-a";
+		
+		clk: clock {
+			#clock-cells = <0>;
+		};
+	};
+};

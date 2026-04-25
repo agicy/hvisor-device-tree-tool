@@ -12,19 +12,19 @@ pub mod writer;
 pub trait Visitor {
     /// 进入节点前调用
     /// 返回 false 表示不再深入该节点的子节点
-    fn enter_node(&mut self, _name: &str, _node: &mut Node) -> bool {
+    fn enter_node(&mut self, _name: &str, _node: &Node) -> bool {
         true
     }
 
     /// 退出节点后调用（子节点已访问完毕）
-    fn exit_node(&mut self, _name: &str, _node: &mut Node) {}
+    fn exit_node(&mut self, _name: &str, _node: &Node) {}
 }
 
 /// 遍历器
 pub struct Walker;
 
 impl Walker {
-    pub fn walk(node: &mut Node, name: &str, visitor: &mut impl Visitor) {
+    pub fn walk(node: &Node, name: &str, visitor: &mut impl Visitor) {
         // Enter 钩子
         if visitor.enter_node(name, node) {
             // 递归遍历子节点

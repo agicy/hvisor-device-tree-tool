@@ -653,7 +653,7 @@ fn parse_data_cells(input: &[u8]) -> IResult<&[u8], Data> {
             opt(ws(preceded(
                 tag("/bits/"),
                 map_res(take_until("<"), |s: &[u8]| {
-                    from_str_dec::<u64>(str::from_utf8(s).unwrap())
+                    from_str_dec::<u64>(str::from_utf8(s).unwrap().trim())
                 }),
             ))),
             |b: Option<u64>| b.unwrap_or(32),
