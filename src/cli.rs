@@ -6,7 +6,7 @@ use crate::dts::tree::{Data, Node, Property};
 use crate::visitors::writer::DtsWriter;
 use crate::visitors::{
     Walker, dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
-    reg_extractor::RegExtractor, sorter::SortByReference,
+    pinctrl::PinctrlExtractor, reg_extractor::RegExtractor, sorter::SortByReference,
 };
 use clap::{Parser, Subcommand};
 
@@ -53,6 +53,13 @@ enum Commands {
     //
     // This command analyzes the dependencies between nodes.
     Dependency {
+        // Input DTS file path. If not provided, reads from stdin.
+        input: Option<PathBuf>,
+    },
+    // Extract pinctrl information.
+    //
+    // This command parses the DTS and extracts pinctrl configurations.
+    ExtractPinctrl {
         // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
@@ -118,6 +125,13 @@ pub fn run() {
             let tree = get_tree(input.as_ref());
             let mut extractor = DependencyExtractor::new();
             // Walk the tree to extract dependencies.
+            Walker::walk(&tree.root, "/", &mut extractor);
+            println!("{}", extractor.output());
+        }
+        Commands::ExtractPinctrl { input } => {
+            let tree = get_tree(input.as_ref());
+            let mut extractor = PinctrlExtractor::new();
+            // Walk the tree to extract pinctrl information.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());
         }

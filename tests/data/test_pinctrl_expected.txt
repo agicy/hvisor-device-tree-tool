@@ -1,0 +1,10 @@
+/pinctrl/uart0,1
+/pinctrl/uart0/uart0-xfer,1
+gpio0,1,1,pcfg_pull_up
+/pinctrl/i2c0,2
+/pinctrl/i2c0/i2c0-xfer,2
+gpio1,2,2,pcfg_pull_none
+gpio1,3,2,pcfg_pull_none
+/pinctrl/i2c0/i2c0-sleep,2
+gpio1,2,0,pcfg_pull_none
+gpio1,3,0,pcfg_pull_none

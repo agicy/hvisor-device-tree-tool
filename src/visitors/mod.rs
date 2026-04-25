@@ -3,6 +3,7 @@ use crate::dts::tree::Node;
 pub mod dependency;
 pub mod filter;
 pub mod interrupts;
+pub mod pinctrl;
 pub mod reg_extractor;
 pub mod sorter;
 pub mod writer;
