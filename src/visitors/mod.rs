@@ -1,6 +1,7 @@
 use crate::dts::tree::Node;
 
 pub mod dependency;
+pub mod device_pinctrl;
 pub mod filter;
 pub mod interrupts;
 pub mod pinctrl;

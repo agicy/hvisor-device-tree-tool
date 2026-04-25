@@ -14161,3 +14161,7 @@
 &syssram {
   status = "disabled";
 };
+
+&leds {
+  status = "disabled";
+};

@@ -34,6 +34,8 @@ pub struct PinctrlExtractor {
     // 1 = device node
     // 2 = scheme node
     depth_stack: usize,
+    // Stack to track the current path.
+    path_stack: Vec<String>,
     
     // The currently processing device.
     current_device: Option<DeviceInfo>,
@@ -47,6 +49,7 @@ impl PinctrlExtractor {
         Self {
             in_pinctrl: false,
             depth_stack: 0,
+            path_stack: Vec::new(),
             current_device: None,
             devices: Vec::new(),
         }
@@ -88,7 +91,7 @@ impl PinctrlExtractor {
         false
     }
 
-    fn parse_rockchip_pins(data: &[Data]) -> Vec<PinConfig> {
+    pub fn parse_rockchip_pins(data: &[Data]) -> Vec<PinConfig> {
         let mut pins = Vec::new();
         let mut all_cells = Vec::new();
 
@@ -134,6 +137,15 @@ impl PinctrlExtractor {
 
 impl Visitor for PinctrlExtractor {
     fn enter_node(&mut self, name: &str, node: &Node) -> bool {
+        self.path_stack.push(name.to_string());
+        
+        // Construct full path
+        let full_path = if self.path_stack.len() == 1 && self.path_stack[0] == "/" {
+            "/".to_string()
+        } else {
+            format!("/{}", self.path_stack[1..].join("/"))
+        };
+
         // Check if we are entering pinctrl
         if !self.in_pinctrl {
             if self.is_pinctrl_node(node) {
@@ -149,11 +161,8 @@ impl Visitor for PinctrlExtractor {
         if self.depth_stack == 1 {
             // This is a potential device node
             // e.g. "uart0", "i2c0"
-            let alias = if let Node::Existing { labels, .. } = node {
-                labels.first().cloned().unwrap_or(name.to_string())
-            } else {
-                name.to_string()
-            };
+            // Use full path as alias
+            let alias = full_path;
             
             self.current_device = Some(DeviceInfo {
                 alias,
@@ -168,7 +177,7 @@ impl Visitor for PinctrlExtractor {
                         let pins = Self::parse_rockchip_pins(data);
                         if !pins.is_empty() {
                             device.schemes.push(SchemeInfo {
-                                name: name.to_string(),
+                                name: full_path,
                                 pins,
                             });
                         }
@@ -198,5 +207,6 @@ impl Visitor for PinctrlExtractor {
                 self.depth_stack -= 1;
             }
         }
+        self.path_stack.pop();
     }
 }

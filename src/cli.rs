@@ -5,8 +5,9 @@ use crate::dts;
 use crate::dts::tree::{Data, Node, Property};
 use crate::visitors::writer::DtsWriter;
 use crate::visitors::{
-    Walker, dependency::DependencyExtractor, filter::NodeFilter, interrupts::InterruptsExtractor,
-    pinctrl::PinctrlExtractor, reg_extractor::RegExtractor, sorter::SortByReference,
+    Walker, dependency::DependencyExtractor, device_pinctrl::DevicePinctrlExtractor, filter::NodeFilter,
+    interrupts::InterruptsExtractor, pinctrl::PinctrlExtractor, reg_extractor::RegExtractor,
+    sorter::SortByReference,
 };
 use clap::{Parser, Subcommand};
 
@@ -60,6 +61,13 @@ enum Commands {
     //
     // This command parses the DTS and extracts pinctrl configurations.
     ExtractPinctrl {
+        // Input DTS file path. If not provided, reads from stdin.
+        input: Option<PathBuf>,
+    },
+    // Extract device pinctrl usage information.
+    //
+    // This command parses the DTS and extracts device to pinctrl pin mappings.
+    ExtractDevicePinctrl {
         // Input DTS file path. If not provided, reads from stdin.
         input: Option<PathBuf>,
     },
@@ -132,6 +140,13 @@ pub fn run() {
             let tree = get_tree(input.as_ref());
             let mut extractor = PinctrlExtractor::new();
             // Walk the tree to extract pinctrl information.
+            Walker::walk(&tree.root, "/", &mut extractor);
+            println!("{}", extractor.output());
+        }
+        Commands::ExtractDevicePinctrl { input } => {
+            let tree = get_tree(input.as_ref());
+            let mut extractor = DevicePinctrlExtractor::new(&tree);
+            // Walk the tree to extract device pinctrl information.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());
         }
