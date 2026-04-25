@@ -157,14 +157,43 @@ impl Visitor for SortByReference {
             *children = IndexMap::new();
         }
         self.stack.push(new_node);
+        // We need to visit children manually to rebuild the tree in exit_node
+        // Visitor trait automatically visits children, but here we are building a new tree
+        // The Visitor implementation in lib.rs iterates over children.
+        // Our enter_node pushes a new node to the stack.
+        // Then walk visits children.
+        // enter_node for child pushes child to stack.
+        // exit_node for child pops child and adds to parent (which is on top of stack).
+        
         true
     }
 
-    fn exit_node(&mut self, _name: &str, _node: &Node) {
+    fn exit_node(&mut self, name: &str, _node: &Node) {
         if let Some(mut new_node) = self.stack.pop() {
             // Sort children before adding to parent
             if let Node::Existing { children, .. } = &mut new_node {
-                if children.len() > 1 {
+                // If children were populated by recursive calls, they are already in the `children` map.
+                // But wait, the standard Walker doesn't populate our `new_node`.
+                // It just calls enter/exit.
+                // So when we are in exit_node(child), we need to add `new_node` (the child) to `parent`.
+                // The `parent` is the current top of the stack.
+                
+                // However, `new_node` here has empty children because we cleared them in `enter_node`.
+                // And since `enter_node` cleared them, and we didn't add anything back...
+                // Ah, the logic in `exit_node` below adds the popped node to the parent.
+                // So `parent` (on stack) accumulates children.
+                
+                // BUT: `new_node` itself (the one we just popped) should have accumulated ITS children
+                // during the visits between its enter and exit.
+                // Let's verify:
+                // enter(parent) -> push parent (empty children)
+                //   enter(child) -> push child (empty children)
+                //   exit(child) -> pop child. parent is on stack. add child to parent.
+                // exit(parent) -> pop parent.
+                
+                // So `new_node` (the popped one) DOES have children populated.
+                // Now we want to sort them.
+                if !children.is_empty() {
                     let sorted = Self::topological_sort_map(children);
                     *children = sorted;
                 }
@@ -175,7 +204,8 @@ impl Visitor for SortByReference {
             } else {
                 let parent = self.stack.last_mut().unwrap();
                 if let Node::Existing { children, .. } = parent {
-                    children.insert(_name.to_string(), new_node);
+                    // Use the name from the argument, which is the key in the parent map
+                    children.insert(name.to_string(), new_node);
                 }
             }
         }

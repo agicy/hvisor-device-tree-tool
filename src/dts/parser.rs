@@ -71,6 +71,8 @@ fn eat_junk(input: &[u8]) -> IResult<&[u8], ()> {
                 )),
             ),
             value((), multispace1),
+            // Ignore /omit-if-no-ref/
+            value((), tag("/omit-if-no-ref/")),
         ))),
     )(input)
 }
@@ -697,7 +699,7 @@ fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], I
 
         let (input, labels) = many0(terminated(ws(parse_label), ws(char(':'))))(input)?;
         let (input, _) = eat_junk(input)?;
-        
+
         let (input, name) = map(
             map_res(
                 alt((take_while1(is_prop_node_char), tag("/"))),
@@ -709,7 +711,7 @@ fn parse_prop_or_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], I
         let (input, _) = eat_junk(input)?;
         let (input, next_char) = peek(take(1usize))(input)?;
 
-        if next_char == b"{" {
+        if next_char[0] == b'{' {
             let (input, _) = char('{')(input)?;
             let (input, (props, children)) = parse_contents(input_len)(input)?;
             let (input, _) = ws(char('}'))(input)?;
@@ -758,11 +760,11 @@ fn parse_item(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
                 tuple((
                     peek(rest),
                     tag("/delete-node/"),
-                    map(
+                    ws(map(
                         map_res(take_while1(is_prop_node_char), str::from_utf8),
                         String::from,
-                    ),
-                    char(';'),
+                    )),
+                    ws(char(';')),
                 )),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
@@ -776,11 +778,11 @@ fn parse_item(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
                 tuple((
                     peek(rest),
                     tag("/delete-property/"),
-                    map(
+                    ws(map(
                         map_res(take_while1(is_prop_node_char), str::from_utf8),
                         String::from,
-                    ),
-                    char(';'),
+                    )),
+                    ws(char(';')),
                 )),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
@@ -795,21 +797,31 @@ fn parse_item(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Item> {
     }
 }
 
+fn parse_data_bytes(input: &[u8]) -> IResult<&[u8], Data> {
+    let (input, _) = char::<&[u8], nom::error::Error<&[u8]>>('[')(input)?;
+    let mut current_input = input;
+    let mut bytes = Vec::new();
+
+    loop {
+        let (next_input, _) = eat_junk(current_input)?;
+        if let Ok((final_input, _)) = char::<&[u8], nom::error::Error<&[u8]>>(']')(next_input) {
+            return Ok((final_input, Data::ByteArray(bytes)));
+        }
+
+        let (next_input, hex_str) = map_res(recognize(take(2usize)), str::from_utf8)(next_input)?;
+        let byte = u8::from_str_radix(hex_str, 16).map_err(|_| {
+            nom::Err::Error(nom::error::Error::new(next_input, nom::error::ErrorKind::Tag))
+        })?;
+        bytes.push(byte);
+        current_input = next_input;
+    }
+}
+
 fn parse_data(input: &[u8]) -> IResult<&[u8], Data> {
     ws(alt((
         delimited(char('"'), map(escape_c_string, Data::String), char('"')),
         parse_data_cells,
-        delimited(
-            char('['),
-            map(
-                many1(map_res(
-                    map_res(ws(take(2usize)), str::from_utf8),
-                    from_str_hex::<u8>,
-                )),
-                Data::ByteArray,
-            ),
-            char(']'),
-        ),
+        parse_data_bytes,
         map(parse_ref, |x| Data::Reference(x, None)),
     )))(input)
 }
@@ -822,11 +834,11 @@ fn parse_prop(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Property>
                 tuple((
                     peek(rest),
                     tag("/delete-property/"),
-                    map(
+                    ws(map(
                         map_res(take_while1(is_prop_node_char), str::from_utf8),
                         String::from,
-                    ),
-                    char(';'),
+                    )),
+                    ws(char(';')),
                 )),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
@@ -871,11 +883,11 @@ fn parse_node(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
                 tuple((
                     peek(rest),
                     tag("/delete-node/"),
-                    map(
+                    ws(map(
                         map_res(take_while1(is_prop_node_char), str::from_utf8),
                         String::from,
-                    ),
-                    char(';'),
+                    )),
+                    ws(char(';')),
                 )),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
@@ -926,7 +938,7 @@ fn parse_amend(input_len: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Node> {
     move |input: &[u8]| {
         ws(alt((
             map(
-                tuple((peek(rest), tag("/delete-node/"), parse_ref, char(';'))),
+                tuple((peek(rest), tag("/delete-node/"), ws(parse_ref), ws(char(';')))),
                 |(rem, _, name, _)| {
                     let offset = rem.len();
                     Node::Deleted {
@@ -1034,19 +1046,18 @@ pub enum ParseResult<'a> {
 pub fn parse_dt(source: &[u8]) -> Result<ParseResult<'_>, ParseError> {
     match parse_dts(source.len())(source) {
         Ok((remaining, (tree, amends))) => {
-            if remaining.is_empty() {
-                Ok(ParseResult::Complete(tree, amends))
-            } else {
-                Ok(ParseResult::RemainingInput(tree, amends, remaining))
-            }
+            // Try to consume any remaining junk (whitespace, comments, etc.)
+            let (final_remaining, _) = eat_junk(remaining).unwrap_or((remaining, ()));
+            
+            if !final_remaining.is_empty() {
+                 let preview_len = std::cmp::min(100, final_remaining.len());
+                 panic!("Remaining input (length {}): {:?}", final_remaining.len(), String::from_utf8_lossy(&final_remaining[..preview_len]));
+             }
+
+            Ok(ParseResult::Complete(tree, amends))
         }
         Err(nom::Err::Incomplete(_)) => Err(ParseError::IncompleteInput),
-        Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-            eprintln!(
-                "Nom Error: {:?}, Input: {:?}",
-                e.code,
-                std::str::from_utf8(e.input).unwrap_or("not utf8")
-            );
+        Err(nom::Err::Error(_e)) | Err(nom::Err::Failure(_e)) => {
             Err(ParseError::NomError)
         }
     }

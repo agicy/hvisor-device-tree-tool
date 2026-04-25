@@ -364,10 +364,10 @@ impl Node {
                 for (name, node) in o_childs {
                     match node {
                         &Node::Deleted { .. } => {
-                            s_childs
-                                .shift_remove(name)
-                                .expect(&format!("Deleted non-existent node {}", name));
-                        } // FIXME: should there always be a deletable node when deleting?
+                            if s_childs.shift_remove(name).is_none() {
+                                eprintln!("Warning: Deleted non-existent node {}", name);
+                            }
+                        }
                         &Node::Existing { .. } => {
                             let entry = s_childs.entry(name.to_owned());
                             if let Entry::Occupied(mut e) = entry {

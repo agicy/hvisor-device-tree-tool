@@ -139,8 +139,7 @@ pub fn parse_dts(path: Option<&PathBuf>) -> Result<tree::DTInfo> {
                 tree.merge_amends(&amends);
                 Ok(tree)
             }
-            parser::ParseResult::RemainingInput(mut tree, amends, rem) => {
-                eprintln!("Warning: remaining input: {}", String::from_utf8_lossy(rem));
+            parser::ParseResult::RemainingInput(mut tree, amends, _) => {
                 tree.merge_amends(&amends);
                 Ok(tree)
             }
