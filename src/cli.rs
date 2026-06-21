@@ -5,9 +5,9 @@ use crate::dts;
 use crate::dts::tree::{Data, Node, Property};
 use crate::visitors::writer::DtsWriter;
 use crate::visitors::{
-    Walker, dependency::DependencyExtractor, device_pinctrl::DevicePinctrlExtractor, filter::NodeFilter,
-    interrupts::InterruptsExtractor, pinctrl::PinctrlExtractor, reg_extractor::RegExtractor,
-    sorter::SortByReference,
+    Walker, dependency::DependencyExtractor, device_pinctrl::DevicePinctrlExtractor,
+    filter::NodeFilter, interrupts::InterruptsExtractor, pinctrl::PinctrlExtractor,
+    reg_extractor::RegExtractor, sorter::SortByReference,
 };
 use clap::{Parser, Subcommand};
 
@@ -124,7 +124,7 @@ pub fn run() {
         }
         Commands::ExtractInterrupts { input } => {
             let tree = get_tree(input.as_ref());
-            let mut extractor = InterruptsExtractor::new();
+            let mut extractor = InterruptsExtractor::from_root(&tree.root);
             // Walk the tree to extract interrupt information.
             Walker::walk(&tree.root, "/", &mut extractor);
             println!("{}", extractor.output());

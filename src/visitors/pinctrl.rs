@@ -36,10 +36,10 @@ pub struct PinctrlExtractor {
     depth_stack: usize,
     // Stack to track the current path.
     path_stack: Vec<String>,
-    
+
     // The currently processing device.
     current_device: Option<DeviceInfo>,
-    
+
     // All collected devices.
     pub devices: Vec<DeviceInfo>,
 }
@@ -62,7 +62,12 @@ impl PinctrlExtractor {
             for scheme in &device.schemes {
                 writeln!(output, "{},{}", scheme.name, scheme.pins.len()).unwrap();
                 for pin in &scheme.pins {
-                    writeln!(output, "gpio{},{},{},{}", pin.bank, pin.pin, pin.mux, pin.config).unwrap();
+                    writeln!(
+                        output,
+                        "gpio{},{},{},{}",
+                        pin.bank, pin.pin, pin.mux, pin.config
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -72,7 +77,10 @@ impl PinctrlExtractor {
     fn is_pinctrl_node(&self, node: &Node) -> bool {
         if let Node::Existing { proplist, .. } = node {
             // Check compatible string
-            if let Some(Property::Existing { val: Some(data), .. }) = proplist.get("compatible") {
+            if let Some(Property::Existing {
+                val: Some(data), ..
+            }) = proplist.get("compatible")
+            {
                 for d in data {
                     if let Data::String(s) = d {
                         if s.contains("pinctrl") {
@@ -138,7 +146,7 @@ impl PinctrlExtractor {
 impl Visitor for PinctrlExtractor {
     fn enter_node(&mut self, name: &str, node: &Node) -> bool {
         self.path_stack.push(name.to_string());
-        
+
         // Construct full path
         let full_path = if self.path_stack.len() == 1 && self.path_stack[0] == "/" {
             "/".to_string()
@@ -163,7 +171,7 @@ impl Visitor for PinctrlExtractor {
             // e.g. "uart0", "i2c0"
             // Use full path as alias
             let alias = full_path;
-            
+
             self.current_device = Some(DeviceInfo {
                 alias,
                 schemes: Vec::new(),
@@ -173,7 +181,10 @@ impl Visitor for PinctrlExtractor {
             // e.g. "uart0_xfer"
             if let Some(device) = &mut self.current_device {
                 if let Node::Existing { proplist, .. } = node {
-                    if let Some(Property::Existing { val: Some(data), .. }) = proplist.get("rockchip,pins") {
+                    if let Some(Property::Existing {
+                        val: Some(data), ..
+                    }) = proplist.get("rockchip,pins")
+                    {
                         let pins = Self::parse_rockchip_pins(data);
                         if !pins.is_empty() {
                             device.schemes.push(SchemeInfo {
@@ -202,7 +213,7 @@ impl Visitor for PinctrlExtractor {
                 // Exiting pinctrl node
                 self.in_pinctrl = false;
             }
-            
+
             if self.depth_stack > 0 {
                 self.depth_stack -= 1;
             }

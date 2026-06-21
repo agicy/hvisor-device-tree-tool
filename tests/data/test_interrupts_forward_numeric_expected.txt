@@ -1,0 +1,8 @@
+/timer,timer,3,0x1,0xd,0xf04,/interrupt-controller@fd400000
+/timer,timer,3,0x1,0xe,0xf04,/interrupt-controller@fd400000
+/pmu,pmu,3,0x0,0xe4,0x4,/interrupt-controller@fd400000
+/pmu,pmu,3,0x0,0xe5,0x4,/interrupt-controller@fd400000
+/gpio@fdd60000,gpio@fdd60000,3,0x0,0x21,0x4,/interrupt-controller@fd400000
+/pmic@20,pmic@20,2,0x3,0x8,/gpio@fdd60000
+/device@1000,device@1000,3,0x0,0x30,0x4,/interrupt-controller@fd400000
+/device@1000,device@1000,2,0x5,0x8,/gpio@fdd60000

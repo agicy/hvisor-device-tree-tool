@@ -1,6 +1,6 @@
-use crate::dts::tree::{DTInfo, Node, Property, Data, Cell};
+use crate::dts::tree::{Cell, DTInfo, Data, Node, Property};
 use crate::visitors::Visitor;
-use crate::visitors::pinctrl::{PinctrlExtractor, PinConfig};
+use crate::visitors::pinctrl::{PinConfig, PinctrlExtractor};
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -28,7 +28,7 @@ impl<'a> DevicePinctrlExtractor<'a> {
 
         // Build label map
         Self::build_label_map(&tree.root, "/", &mut label_map);
-        
+
         // Parse aliases to build gpio mapping
         if let Ok(aliases) = tree.get_node_by_path("/aliases") {
             if let Node::Existing { proplist, .. } = aliases {
@@ -36,18 +36,21 @@ impl<'a> DevicePinctrlExtractor<'a> {
                     if name.starts_with("gpio") {
                         let suffix = &name[4..];
                         if let Ok(bank_id) = suffix.parse::<u32>() {
-                             if let Property::Existing { val: Some(data), .. } = prop {
-                                 for d in data {
-                                     match d {
-                                         Data::Reference(label, _) => {
-                                             gpio_banks.insert(label.clone(), bank_id);
-                                         },
-                                         // Sometimes it might be Data::String in some DTS parsers? 
-                                         // But dts-parser typically uses Reference for &gpio0
-                                         _ => {}
-                                     }
-                                 }
-                             }
+                            if let Property::Existing {
+                                val: Some(data), ..
+                            } = prop
+                            {
+                                for d in data {
+                                    match d {
+                                        Data::Reference(label, _) => {
+                                            gpio_banks.insert(label.clone(), bank_id);
+                                        }
+                                        // Sometimes it might be Data::String in some DTS parsers?
+                                        // But dts-parser typically uses Reference for &gpio0
+                                        _ => {}
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -62,9 +65,12 @@ impl<'a> DevicePinctrlExtractor<'a> {
             label_map,
         }
     }
-    
+
     fn build_label_map(node: &Node, current_path: &str, map: &mut HashMap<String, String>) {
-        if let Node::Existing { labels, children, .. } = node {
+        if let Node::Existing {
+            labels, children, ..
+        } = node
+        {
             for label in labels {
                 map.insert(label.clone(), current_path.to_string());
             }
@@ -83,21 +89,32 @@ impl<'a> DevicePinctrlExtractor<'a> {
     pub fn output(&self) -> String {
         let mut output = String::new();
         for pin in &self.pins {
-            writeln!(output, "{},{},{},{},{},{}", 
-                pin.device_name, 
-                pin.pinctrl_name.replace(',', "_"), 
-                pin.config.bank, 
-                pin.config.pin, 
-                pin.config.mux, 
+            writeln!(
+                output,
+                "{},{},{},{},{},{}",
+                pin.device_name,
+                pin.pinctrl_name.replace(',', "_"),
+                pin.config.bank,
+                pin.config.pin,
+                pin.config.mux,
                 pin.config.config
-            ).unwrap();
+            )
+            .unwrap();
         }
         output
     }
 
     fn extract_from_node(&mut self, device_name: &str, label: &str, pinctrl_node: &Node) {
-        if let Node::Existing { proplist: pinctrl_props, .. } = pinctrl_node {
-            if let Some(Property::Existing { val: Some(pins_data), .. }) = pinctrl_props.get("rockchip,pins") {
+        if let Node::Existing {
+            proplist: pinctrl_props,
+            ..
+        } = pinctrl_node
+        {
+            if let Some(Property::Existing {
+                val: Some(pins_data),
+                ..
+            }) = pinctrl_props.get("rockchip,pins")
+            {
                 let parsed_pins = PinctrlExtractor::parse_rockchip_pins(pins_data);
                 for pin_config in parsed_pins {
                     self.pins.push(DevicePin {
@@ -114,7 +131,7 @@ impl<'a> DevicePinctrlExtractor<'a> {
 impl<'a> Visitor for DevicePinctrlExtractor<'a> {
     fn enter_node(&mut self, name: &str, node: &Node) -> bool {
         self.path_stack.push(name.to_string());
-        
+
         // Construct full path
         let full_path = if self.path_stack.len() == 1 && self.path_stack[0] == "/" {
             "/".to_string()
@@ -133,25 +150,47 @@ impl<'a> Visitor for DevicePinctrlExtractor<'a> {
                 if prop_name.starts_with("pinctrl-") {
                     let suffix = &prop_name[8..];
                     if suffix.chars().all(|c| c.is_digit(10)) {
-                         if let Property::Existing { val: Some(data), .. } = prop {
+                        if let Property::Existing {
+                            val: Some(data), ..
+                        } = prop
+                        {
                             for d in data {
                                 match d {
                                     Data::Cells(_, cells) => {
                                         for cell in cells {
                                             if let Cell::Ref(label, _) = cell {
-                                                if let Ok(pinctrl_node) = self.tree.get_node_by_label(label) {
-                                                    let pinctrl_path = self.label_map.get(label).cloned().unwrap_or(label.to_string());
-                                                    self.extract_from_node(device_name, &pinctrl_path, pinctrl_node);
+                                                if let Ok(pinctrl_node) =
+                                                    self.tree.get_node_by_label(label)
+                                                {
+                                                    let pinctrl_path = self
+                                                        .label_map
+                                                        .get(label)
+                                                        .cloned()
+                                                        .unwrap_or(label.to_string());
+                                                    self.extract_from_node(
+                                                        device_name,
+                                                        &pinctrl_path,
+                                                        pinctrl_node,
+                                                    );
                                                 }
                                             }
                                         }
-                                    },
+                                    }
                                     Data::Reference(label, _) => {
-                                        if let Ok(pinctrl_node) = self.tree.get_node_by_label(label) {
-                                            let pinctrl_path = self.label_map.get(label).cloned().unwrap_or(label.to_string());
-                                            self.extract_from_node(device_name, &pinctrl_path, pinctrl_node);
+                                        if let Ok(pinctrl_node) = self.tree.get_node_by_label(label)
+                                        {
+                                            let pinctrl_path = self
+                                                .label_map
+                                                .get(label)
+                                                .cloned()
+                                                .unwrap_or(label.to_string());
+                                            self.extract_from_node(
+                                                device_name,
+                                                &pinctrl_path,
+                                                pinctrl_node,
+                                            );
                                         }
-                                    },
+                                    }
                                     _ => {}
                                 }
                             }
@@ -162,43 +201,47 @@ impl<'a> Visitor for DevicePinctrlExtractor<'a> {
                 // 2. Check for gpios properties
                 // e.g. gpios, reset-gpios, enable-gpios, snps,reset-gpio
                 if prop_name.ends_with("gpios") || prop_name.ends_with("gpio") {
-                    if let Property::Existing { val: Some(data), .. } = prop {
-                         for d in data {
-                             if let Data::Cells(_, cells) = d {
-                                 // Simple heuristic parsing for <&phandle pin flags>
-                                 // We look for Cell::Ref followed by Cell::Num
-                                 let mut iter = cells.iter();
-                                 while let Some(cell) = iter.next() {
-                                     if let Cell::Ref(label, _) = cell {
-                                         if let Some(bank_id) = self.gpio_banks.get(label) {
-                                             // Found a GPIO reference
-                                             // The next cell should be the pin number
-                                             if let Some(Cell::Num(pin)) = iter.next() {
-                                                 let pin = *pin as u32;
-                                                 
-                                                 // Try to get flags if available (consume it)
-                                                 let flags_str = if let Some(Cell::Num(flags)) = iter.next() {
-                                                     format!("0x{:x}", flags)
-                                                 } else {
-                                                     "0x0".to_string()
-                                                 };
+                    if let Property::Existing {
+                        val: Some(data), ..
+                    } = prop
+                    {
+                        for d in data {
+                            if let Data::Cells(_, cells) = d {
+                                // Simple heuristic parsing for <&phandle pin flags>
+                                // We look for Cell::Ref followed by Cell::Num
+                                let mut iter = cells.iter();
+                                while let Some(cell) = iter.next() {
+                                    if let Cell::Ref(label, _) = cell {
+                                        if let Some(bank_id) = self.gpio_banks.get(label) {
+                                            // Found a GPIO reference
+                                            // The next cell should be the pin number
+                                            if let Some(Cell::Num(pin)) = iter.next() {
+                                                let pin = *pin as u32;
 
-                                                 self.pins.push(DevicePin {
-                                                     device_name: device_name.to_string(),
-                                                     pinctrl_name: prop_name.clone(),
-                                                     config: PinConfig {
-                                                         bank: *bank_id,
-                                                         pin: pin,
-                                                         mux: 0, // GPIO mode
-                                                         config: flags_str,
-                                                     }
-                                                 });
-                                             }
-                                         }
-                                     }
-                                 }
-                             }
-                         }
+                                                // Try to get flags if available (consume it)
+                                                let flags_str =
+                                                    if let Some(Cell::Num(flags)) = iter.next() {
+                                                        format!("0x{:x}", flags)
+                                                    } else {
+                                                        "0x0".to_string()
+                                                    };
+
+                                                self.pins.push(DevicePin {
+                                                    device_name: device_name.to_string(),
+                                                    pinctrl_name: prop_name.clone(),
+                                                    config: PinConfig {
+                                                        bank: *bank_id,
+                                                        pin: pin,
+                                                        mux: 0, // GPIO mode
+                                                        config: flags_str,
+                                                    },
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

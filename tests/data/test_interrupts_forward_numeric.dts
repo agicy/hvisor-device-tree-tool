@@ -1,0 +1,40 @@
+/dts-v1/;
+
+/ {
+	interrupt-parent = <0x1>;
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <0x1 0xd 0xf04 0x1 0xe 0xf04>;
+	};
+
+	pmu {
+		compatible = "arm,cortex-a55-pmu";
+		interrupts = <0x0 0xe4 0x4 0x0 0xe5 0x4>;
+	};
+
+	interrupt-controller@fd400000 {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <0x3>;
+		interrupt-controller;
+		phandle = <0x1>;
+	};
+
+	gpio0: gpio@fdd60000 {
+		compatible = "rockchip,gpio-bank";
+		interrupt-controller;
+		#interrupt-cells = <0x2>;
+		interrupt-parent = <0x1>;
+		interrupts = <0x0 0x21 0x4>;
+		phandle = <0x3f>;
+	};
+
+	pmic@20 {
+		interrupt-parent = <0x3f>;
+		interrupts = <0x3 0x8>;
+	};
+
+	device@1000 {
+		interrupts-extended = <0x1 0x0 0x30 0x4 0x3f 0x5 0x8>;
+	};
+};

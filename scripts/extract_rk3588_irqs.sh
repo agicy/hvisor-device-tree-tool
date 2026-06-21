@@ -22,14 +22,14 @@ else
     exit 1
 fi
 
-# Run extract-interrupts, filter for potential GIC parents, extract columns, and process
+# Run extract-interrupts, keep GIC SPI entries, extract columns, and process.
 # Expected format: full_path,name,chunk_size,cell1,cell2,cell3,parent_full_path
-# We assume GIC interrupts have at least 3 cells, and the 2nd cell (index 5) is the IRQ number.
-# We extract $1 (path), $5 (irq) using awk.
+# ARM GIC uses cell1 as interrupt type: 0 means SPI, 1 means PPI.
+# hvisor configs use the global interrupt ID, so only SPI offsets get +32.
 
 $HDTT extract-interrupts "$DTS_FILE" \
 | grep -iE "gic|interrupt-controller" \
-| awk -F',' '{print $1, $5}' \
+| awk -F',' '$3 == 3 && $4 == "0x0" {print $1, $5}' \
 | while read -r path irq; do
     final_irq=$(($irq + 32))
     printf "%d 0x%x, // %s\n" "$final_irq" "$final_irq" "$path"

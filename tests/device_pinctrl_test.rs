@@ -14,7 +14,7 @@ fn test_device_pinctrl() {
     Walker::walk(&tree.root, "/", &mut extractor);
 
     let expected = std::fs::read_to_string(&expected_path).expect("Failed to read expected file");
-    
+
     // Normalize newlines and trim
     assert_eq!(extractor.output().trim(), expected.trim());
 }

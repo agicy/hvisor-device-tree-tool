@@ -45,12 +45,7 @@ impl RegExtractor {
         for reg in &self.regs {
             use std::fmt::Write;
             if !reg.size_hex.is_empty() {
-                writeln!(
-                    output,
-                    "{},{},{}",
-                    reg.alias, reg.start_hex, reg.size_hex
-                )
-                .unwrap();
+                writeln!(output, "{},{},{}", reg.alias, reg.start_hex, reg.size_hex).unwrap();
             } else {
                 writeln!(output, "{},{},", reg.alias, reg.start_hex).unwrap();
             }
@@ -87,17 +82,13 @@ impl Visitor for RegExtractor {
         // 2. Determine cells used by current node FOR ITS CHILDREN.
         // The current node's reg property is parsed using PARENT's cells.
         // The current node's #address-cells/#size-cells define the context for ITS CHILDREN.
-        
+
         let child_addr_cells =
             Self::get_u32_prop(node, "#address-cells").unwrap_or(parent_addr_cells);
-        let child_size_cells =
-            Self::get_u32_prop(node, "#size-cells").unwrap_or(parent_size_cells);
+        let child_size_cells = Self::get_u32_prop(node, "#size-cells").unwrap_or(parent_size_cells);
 
         // 3. Extract and print Reg using PARENT's cells.
-        if let Node::Existing {
-            proplist, ..
-        } = node
-        {
+        if let Node::Existing { proplist, .. } = node {
             if let Some(Property::Existing {
                 val: Some(data), ..
             }) = proplist.get("reg")
